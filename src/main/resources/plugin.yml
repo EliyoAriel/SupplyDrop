@@ -1,0 +1,20 @@
+name: SupplyDrop
+version: '${project.version}'
+main: com.supplydrop.SupplyDrop
+api-version: '1.21'
+description: World event supply drops with randomized loot tables
+authors: [BaseFields]
+commands:
+  supplydrop:
+    description: Call in a supply drop or manage loot tables
+    aliases: [drop, sd]
+    usage: /supplydrop <call|spawn|active|db|package|templates|reload|version|pause|resume|auto>
+permissions:
+  supplydrop.admin:
+    description: Full administrative access to SupplyDrop
+    default: op
+    children:
+      supplydrop.package.all: true
+  supplydrop.package.all:
+    description: Use all configured supply drop loot tables
+    default: false

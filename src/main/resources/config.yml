@@ -1,0 +1,168 @@
+# SupplyDrop Configuration
+
+# Drop Settings
+drop:
+  parachute:
+    # Number of chickens to use for the parachute system
+    chicken-count: 5
+  particles:
+    # Whether to show particle effects when the package lands
+    landing-effects: true
+    # Whether to show continuous particle effects while the package exists
+    continuous-effects: true
+    # Whether to show the flare effect when the package is dropped
+    flare-effects: true
+    smoke:
+      # Whether to show the smoke trail effect
+      enabled: false
+      # Height of the smoke trail effect in blocks
+      height: 20
+    landing-zone:
+      # Show a particle ring on the ground where the crate will land
+      enabled: true
+      # Radius of the ring in blocks
+      radius: 3
+      # Particle type for the ring
+      particle: FLAME
+  # How fast the crate falls when dropped (lower = slower, gives players more PvP time)
+  falling-speed: 0.3
+  # Height in blocks from which to drop the crate
+  height: 20
+  hologram:
+    # Whether to show a floating text hologram above the crate
+    enabled: true
+    # Lines of text to display (supports & color codes)
+    # Placeholders:
+    #   {template}/{name} = display name, {x} = x coord, {z} = z coord
+    #   {team} = "TEAM CRATE" label, {team-required} = players needed
+    #   {team-remaining} = players still needed, {team-progress} = visual progress bar
+    lines:
+      - "&b&l{template}"
+      - "{team}"
+      - "{team-progress}"
+      - "{time}"
+      - "&7Right-click to open"
+
+# Crate settings
+crate:
+  # Auto-destroy crate after this many ticks (0 = never, 12000 = 10 min)
+  expiry: 0
+  # Anti-grief: protection radius around crate (blocks). 0 = disabled
+  protection-radius: 2
+  # Chance (%) for a crate to require multiple players to open (0 = never)
+  team-open-chance: 0
+  # How many players must right-click simultaneously to open (when triggered)
+  team-open-players: 2
+  # Chance (%) for a crate to be a trap (0 = disabled)
+  trap-chance: 0
+  # Mob types to spawn when trap crate is opened
+  trap-mobs:
+    - ZOMBIE
+    - SKELETON
+    - CREEPER
+
+# Loot rarity tiers (weights are relative, higher = more common)
+rarity:
+  common:
+    weight: 60
+    color: GRAY
+    prefix: "&7"
+  uncommon:
+    weight: 25
+    color: GREEN
+    prefix: "&a"
+  rare:
+    weight: 10
+    color: BLUE
+    prefix: "&9"
+  legendary:
+    weight: 5
+    color: GOLD
+    prefix: "&6"
+
+# How many items to roll per drop (min-max)
+rolls:
+  min: 3
+  max: 6
+
+# Announcement settings
+announce:
+  # Use actionbar instead of chat for announcements
+  actionbar: false
+  # Delay in ticks before revealing coordinates (0 = immediate)
+  coord-reveal-delay: 0
+
+# Auto-drop settings (world event)
+auto-drop:
+  # Master toggle for auto-drops
+  enabled: false
+  # Pause toggle - stops drops without disabling the scheduler
+  paused: false
+  # Fixed interval between drops in ticks (72000 = 1 hour)
+  interval: 72000
+  # Use random interval between min-max instead of fixed
+  random-interval: false
+  # Random interval range in ticks (only used if random-interval is true)
+  interval-min: 36000
+  interval-max: 72000
+  # World to drop in
+  world: "world"
+  # Random radius from world spawn in blocks
+  random-radius: 500
+  # Loot table templates for auto-drops (weighted — higher weight = more likely)
+  # Each entry: template-name: { weight: <number> }
+  templates:
+    weapons:
+      weight: 50
+    armor:
+      weight: 30
+    supplies:
+      weight: 20
+  # Whether to announce the drop to all players
+  announce: true
+  # Use actionbar instead of chat for auto-drop announcements
+  announce-actionbar: false
+  # Delay in ticks between announcement and actual drop (100 = 5 seconds)
+  announce-delay: 100
+  # Delay in ticks before revealing coordinates (0 = immediate, overrides global setting)
+  coord-reveal-delay: 0
+  # Number of crates to drop simultaneously (1 = single drop)
+  wave-count: 1
+  # Auto-destroy crate after this many ticks (0 = use crate.expiry, overrides global)
+  expiry: 0
+  # Chance (%) for a crate to require multiple players (0 = never)
+  team-crate-chance: 0
+  # How many players must right-click simultaneously to open
+  team-crate-players: 2
+  # Chance (%) for a crate to be a trap (0 = use crate.trap-chance, overrides global)
+  trap-chance: 0
+  # Mob types to spawn when trap crate is opened
+  trap-mobs:
+    - ZOMBIE
+    - SKELETON
+    - CREEPER
+  # Scale loot quantity based on time since last drop
+  loot-scaling: false
+  # Maximum bonus rolls from loot scaling
+  loot-scaling-max: 20
+  # Escalating rarity: drops get rarer/better the longer without a loot
+  escalating: false
+  # Rarity multiplier per drop without loot (1.5 = 50% better each time)
+  escalating-factor: 1.5
+
+# Logging settings
+logging:
+  # Enables additional debug logs for troubleshooting
+  debug: false
+
+# UI theme settings
+ui:
+  chat:
+    colors:
+      primary: BLUE
+      text: WHITE
+      accent: AQUA
+      success: GREEN
+      warning: YELLOW
+      error: RED
+      error-detail: DARK_RED
