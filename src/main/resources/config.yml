@@ -26,6 +26,8 @@ drop:
       particle: FLAME
   # How fast the crate falls when dropped (lower = slower, gives players more PvP time)
   falling-speed: 0.3
+  # Fall duration in seconds (0 = use falling-speed, >0 = override falling-speed)
+  fall-duration: 0
   # Height in blocks from which to drop the crate
   height: 20
   hologram:
@@ -46,13 +48,15 @@ drop:
 # Crate settings
 crate:
   # Auto-destroy crate after this many ticks (0 = never, 12000 = 10 min)
-  expiry: 0
+  expiry: 1200
   # Anti-grief: protection radius around crate (blocks). 0 = disabled
   protection-radius: 2
+  # Maximum active supplydrops (falling + landed). 0 = unlimited
+  max-active: 30
   # Chance (%) for a crate to require multiple players to open (0 = never)
   team-open-chance: 0
-  # How many players must right-click simultaneously to open (when triggered)
-  team-open-players: 2
+  # Maximum random player count for team crate (2-64). Actual count is random between 2 and this value.
+  team-open-range: 2
   # Chance (%) for a crate to be a trap (0 = disabled)
   trap-chance: 0
   # Mob types to spawn when trap crate is opened
@@ -85,8 +89,20 @@ rolls:
   min: 3
   max: 6
 
+# /supplydrop call settings
+call:
+  # Fall duration in seconds (0 = use global drop.fall-duration)
+  fall-duration: 0
+
+# /supplydrop spawn settings
+spawn:
+  # Fall duration in seconds (0 = use global drop.fall-duration)
+  fall-duration: 0
+
 # Announcement settings
 announce:
+  # Master toggle for all announcements
+  enabled: true
   # Use actionbar instead of chat for announcements
   actionbar: false
   # Delay in ticks before revealing coordinates (0 = immediate)
@@ -98,19 +114,20 @@ auto-drop:
   enabled: false
   # Pause toggle - stops drops without disabling the scheduler
   paused: false
-  # Fixed interval between drops in ticks (72000 = 1 hour)
+  # Use random interval between interval-min and interval-max
+  random-interval: true
+  # Interval between drops in ticks (72000 = 1 hour). Used when random-interval is false.
   interval: 72000
-  # Use random interval between min-max instead of fixed
-  random-interval: false
-  # Random interval range in ticks (only used if random-interval is true)
+  # Random interval range in ticks (set interval > 0 to enable)
   interval-min: 36000
   interval-max: 72000
   # World to drop in
   world: "world"
   # Random radius from world spawn in blocks
   random-radius: 500
+  # Fall duration in seconds (0 = use global drop.fall-duration)
+  fall-duration: 0
   # Loot table templates for auto-drops (weighted — higher weight = more likely)
-  # Each entry: template-name: { weight: <number> }
   templates:
     weapons:
       weight: 50
@@ -118,37 +135,25 @@ auto-drop:
       weight: 30
     supplies:
       weight: 20
-  # Whether to announce the drop to all players
-  announce: true
-  # Use actionbar instead of chat for auto-drop announcements
-  announce-actionbar: false
-  # Delay in ticks between announcement and actual drop (100 = 5 seconds)
-  announce-delay: 100
-  # Delay in ticks before revealing coordinates (0 = immediate, overrides global setting)
-  coord-reveal-delay: 0
   # Number of crates to drop simultaneously (1 = single drop)
   wave-count: 1
-  # Auto-destroy crate after this many ticks (0 = use crate.expiry, overrides global)
+  # Announce settings (inherits from global announce.* unless overridden here)
+  announce: true
+  announce-actionbar: false
+  announce-delay: 100
+  coord-reveal-delay: 0
+  # Crate overrides (0 = use global crate.* settings)
   expiry: 0
-  # Chance (%) for a crate to require multiple players (0 = never)
   team-crate-chance: 0
-  # How many players must right-click simultaneously to open
-  team-crate-players: 2
-  # Chance (%) for a crate to be a trap (0 = use crate.trap-chance, overrides global)
+  team-crate-range: 2
   trap-chance: 0
-  # Mob types to spawn when trap crate is opened
   trap-mobs:
     - ZOMBIE
     - SKELETON
     - CREEPER
-  # Scale loot quantity based on time since last drop
+  # Loot scaling: bonus rolls based on time since last drop
   loot-scaling: false
-  # Maximum bonus rolls from loot scaling
   loot-scaling-max: 20
-  # Escalating rarity: drops get rarer/better the longer without a loot
-  escalating: false
-  # Rarity multiplier per drop without loot (1.5 = 50% better each time)
-  escalating-factor: 1.5
 
 # Logging settings
 logging:
@@ -166,3 +171,8 @@ ui:
       warning: YELLOW
       error: RED
       error-detail: DARK_RED
+
+# Notification settings
+notification:
+  # Whether players are subscribed by default (true = all players get notifications)
+  default-subscribe: true

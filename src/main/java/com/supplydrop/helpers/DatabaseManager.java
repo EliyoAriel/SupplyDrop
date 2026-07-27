@@ -83,8 +83,8 @@ public class DatabaseManager {
      * Save a crate to the database (async).
      */
     public static void save(Location location, String displayName, boolean isTrap,
-                            boolean isTeamCrate, int requiredPlayers) {
-        writeQueue.offer(() -> doSave(location, displayName, isTrap, isTeamCrate, requiredPlayers));
+                            boolean isTeamCrate, int requiredPlayers, String uuid) {
+        writeQueue.offer(() -> doSave(location, displayName, isTrap, isTeamCrate, requiredPlayers, uuid));
     }
 
     /**
@@ -92,6 +92,20 @@ public class DatabaseManager {
      */
     public static void remove(Location location) {
         writeQueue.offer(() -> doRemove(location));
+    }
+
+    /**
+     * Remove a crate by UUID (async).
+     */
+    public static void removeById(String uuid) {
+        writeQueue.offer(() -> doRemoveById(uuid));
+    }
+
+    /**
+     * Remove all crates from the database (async).
+     */
+    public static void removeAll() {
+        writeQueue.offer(() -> doRemoveAll());
     }
 
     // ─── SYNC READ OPERATIONS (startup only) ────────────────────────
@@ -108,6 +122,9 @@ public class DatabaseManager {
         try (Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
+                String uuidStr = rs.getString("uuid");
+                java.util.UUID uuid = (uuidStr != null && !uuidStr.isEmpty())
+                        ? java.util.UUID.fromString(uuidStr) : java.util.UUID.randomUUID();
                 String worldName = rs.getString("world");
                 int x = rs.getInt("x");
                 int y = rs.getInt("y");
@@ -121,7 +138,7 @@ public class DatabaseManager {
                 if (world == null) continue;
 
                 Location loc = new Location(world, x, y, z);
-                records.add(new CrateRecord(loc, displayName, isTrap, isTeamCrate, requiredPlayers));
+                records.add(new CrateRecord(uuid, loc, displayName, isTrap, isTeamCrate, requiredPlayers));
             }
         } catch (SQLException e) {
             AirdropLogger.warning("Failed to load crates from database: " + e.getMessage());
@@ -182,7 +199,7 @@ public class DatabaseManager {
             if (world == null) continue;
 
             Location loc = new Location(world, x, y, z);
-            doSave(loc, displayName, isTrap, isTeamCrate, teamPlayers);
+            doSave(loc, displayName, isTrap, isTeamCrate, teamPlayers, java.util.UUID.randomUUID().toString());
             migrated++;
         }
 
@@ -195,6 +212,7 @@ public class DatabaseManager {
     private static void ensureSchema() throws SQLException {
         String sql = "CREATE TABLE IF NOT EXISTS " + TABLE + " ("
                 + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "uuid TEXT NOT NULL, "
                 + "world TEXT NOT NULL, "
                 + "x INTEGER NOT NULL, "
                 + "y INTEGER NOT NULL, "
@@ -209,23 +227,40 @@ public class DatabaseManager {
         try (Statement stmt = connection.createStatement()) {
             stmt.execute(sql);
         }
+
+        // Migration: add uuid column if missing from existing DB
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(" + TABLE + ")")) {
+            boolean hasUuid = false;
+            while (rs.next()) {
+                if ("uuid".equals(rs.getString("name"))) {
+                    hasUuid = true;
+                    break;
+                }
+            }
+            if (!hasUuid) {
+                stmt.execute("ALTER TABLE " + TABLE + " ADD COLUMN uuid TEXT NOT NULL DEFAULT ''");
+                AirdropLogger.info("Added uuid column to " + TABLE + " table.");
+            }
+        }
     }
 
     private static void doSave(Location location, String displayName, boolean isTrap,
-                               boolean isTeamCrate, int requiredPlayers) {
+                               boolean isTeamCrate, int requiredPlayers, String uuid) {
         if (connection == null) return;
         String sql = "INSERT OR REPLACE INTO " + TABLE
-                + " (world, x, y, z, display_name, is_trap, is_team_crate, required_players) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                + " (uuid, world, x, y, z, display_name, is_trap, is_team_crate, required_players) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setString(1, location.getWorld().getName());
-            ps.setInt(2, location.getBlockX());
-            ps.setInt(3, location.getBlockY());
-            ps.setInt(4, location.getBlockZ());
-            ps.setString(5, displayName);
-            ps.setInt(6, isTrap ? 1 : 0);
-            ps.setInt(7, isTeamCrate ? 1 : 0);
-            ps.setInt(8, requiredPlayers);
+            ps.setString(1, uuid);
+            ps.setString(2, location.getWorld().getName());
+            ps.setInt(3, location.getBlockX());
+            ps.setInt(4, location.getBlockY());
+            ps.setInt(5, location.getBlockZ());
+            ps.setString(6, displayName);
+            ps.setInt(7, isTrap ? 1 : 0);
+            ps.setInt(8, isTeamCrate ? 1 : 0);
+            ps.setInt(9, requiredPlayers);
             ps.executeUpdate();
         } catch (SQLException e) {
             AirdropLogger.warning("Failed to save crate to database: " + e.getMessage());
@@ -244,6 +279,26 @@ public class DatabaseManager {
             ps.executeUpdate();
         } catch (SQLException e) {
             AirdropLogger.warning("Failed to remove crate from database: " + e.getMessage());
+        }
+    }
+
+    private static void doRemoveById(String uuid) {
+        if (connection == null) return;
+        String sql = "DELETE FROM " + TABLE + " WHERE uuid = ?";
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, uuid);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            AirdropLogger.warning("Failed to remove crate by ID from database: " + e.getMessage());
+        }
+    }
+
+    private static void doRemoveAll() {
+        if (connection == null) return;
+        try (Statement stmt = connection.createStatement()) {
+            stmt.executeUpdate("DELETE FROM " + TABLE);
+        } catch (SQLException e) {
+            AirdropLogger.warning("Failed to remove all crates from database: " + e.getMessage());
         }
     }
 
@@ -281,6 +336,6 @@ public class DatabaseManager {
     /**
      * Record holding persisted crate data.
      */
-    public record CrateRecord(Location location, String displayName, boolean isTrap,
+    public record CrateRecord(java.util.UUID uuid, Location location, String displayName, boolean isTrap,
                               boolean isTeamCrate, int requiredPlayers) {}
 }

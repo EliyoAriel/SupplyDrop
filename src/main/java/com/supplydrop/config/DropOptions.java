@@ -11,6 +11,7 @@ public class DropOptions {
     private Boolean smokeEnabled;
     private Integer smokeHeight;
     private Integer expiryTicks;
+    private Integer fallDuration;
 
     public static DropOptions createDefault() {
         return new DropOptions();
@@ -61,6 +62,11 @@ public class DropOptions {
         return this;
     }
 
+    public DropOptions withFallDuration(int duration) {
+        this.fallDuration = duration;
+        return this;
+    }
+
     public int getChickenCount() {
         return chickenCount != null ? ConfigKeys.sanitizeParachuteChickenCount(chickenCount) : ConfigKeys.getParachuteChickenCount();
     }
@@ -95,5 +101,9 @@ public class DropOptions {
 
     public int getExpiryTicks() {
         return expiryTicks != null ? Math.max(0, expiryTicks) : ConfigKeys.getCrateExpiry();
+    }
+
+    public int getFallDuration() {
+        return fallDuration != null ? Math.max(0, fallDuration) : 0;
     }
 }

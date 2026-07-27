@@ -5,7 +5,9 @@ import com.supplydrop.config.ConfigKeys;
 import com.supplydrop.config.ConfigKeys.TemplateWeight;
 import com.supplydrop.config.DropOptions;
 import com.supplydrop.exceptions.SkyNotClearException;
+import com.supplydrop.helpers.AirdropLogger;
 import com.supplydrop.helpers.ChatHandler;
+import com.supplydrop.helpers.CrateManager;
 import com.supplydrop.loot.LootTable;
 import com.supplydrop.packages.Package;
 import com.supplydrop.packages.PackageManager;
@@ -69,7 +71,8 @@ public class DropController {
      * Call a drop using a specific loot table template.
      */
     public static void callNamedDrop(Package pkg, Player player) throws SkyNotClearException {
-        DropOptions options = DropOptions.createDefault();
+        int fallDuration = pkg.getFallDuration() > 0 ? pkg.getFallDuration() : ConfigKeys.getCallFallDuration();
+        DropOptions options = DropOptions.createDefault().withFallDuration(fallDuration);
         World world = player.getWorld();
         Location playerLoc = player.getLocation();
         Location spawnLocation = getSpawnLocation(world, playerLoc, options);
@@ -84,7 +87,9 @@ public class DropController {
      * Drop at a specific location (for auto-drops).
      */
     public static void dropAtLocation(Package pkg, World world, Location loc) throws SkyNotClearException {
-        DropOptions options = DropOptions.createDefault();
+        int fallDuration = pkg.getFallDuration() > 0 ? pkg.getFallDuration() : ConfigKeys.getAutoDropFallDuration();
+        int expiry = ConfigKeys.getAutoDropExpiry();
+        DropOptions options = DropOptions.createDefault().withFallDuration(fallDuration).withExpiryTicks(expiry);
         Location spawnLocation = getSpawnLocation(world, loc, options);
 
         int bonusRolls = calculateBonusRolls();
@@ -98,7 +103,9 @@ public class DropController {
      */
     public static List<Crate> dropWave(Package pkg, World world, Location centerLoc, int count) throws SkyNotClearException {
         List<Crate> crates = new ArrayList<>();
-        DropOptions options = DropOptions.createDefault();
+        int fallDuration = pkg.getFallDuration() > 0 ? pkg.getFallDuration() : ConfigKeys.getAutoDropFallDuration();
+        int expiry = ConfigKeys.getAutoDropExpiry();
+        DropOptions options = DropOptions.createDefault().withFallDuration(fallDuration).withExpiryTicks(expiry);
         int radius = ConfigKeys.getAutoDropRandomRadius();
 
         for (int i = 0; i < count; i++) {
@@ -184,6 +191,11 @@ public class DropController {
     }
 
     private static Crate dropCrateAtLocation(Location spawnLocation, World world, List<ItemStack> loot, DropOptions options, String displayName, boolean isTrap) {
+        int maxActive = ConfigKeys.getCrateMaxActive();
+        if (maxActive > 0 && CrateManager.getTotalCrateCount() >= maxActive) {
+            AirdropLogger.info("Max active supplydrops (" + maxActive + ") reached, skipping drop.");
+            return null;
+        }
         Crate crate = new Crate(spawnLocation.clone(), world, loot, options, displayName, isTrap);
         crate.dropCrate();
         return crate;
@@ -193,7 +205,8 @@ public class DropController {
      * Bypass spawn: force specific conditions (for admin commands).
      */
     public static void spawnForced(Package pkg, Player player, boolean forceTeam, boolean forceTrap, int teamPlayers, int expiryTicks) throws SkyNotClearException {
-        DropOptions options = DropOptions.createDefault().withExpiryTicks(expiryTicks);
+        int fallDuration = pkg.getFallDuration() > 0 ? pkg.getFallDuration() : ConfigKeys.getSpawnFallDuration();
+        DropOptions options = DropOptions.createDefault().withExpiryTicks(expiryTicks).withFallDuration(fallDuration);
         World world = player.getWorld();
         Location spawnLocation = getSpawnLocation(world, player.getLocation(), options);
 
@@ -211,7 +224,8 @@ public class DropController {
      * Bypass wave spawn: force multiple crates with conditions.
      */
     public static void spawnWaveForced(Package pkg, Player player, int count, boolean forceTeam, boolean forceTrap, int teamPlayers, int expiryTicks) throws SkyNotClearException {
-        DropOptions options = DropOptions.createDefault().withExpiryTicks(expiryTicks);
+        int fallDuration = pkg.getFallDuration() > 0 ? pkg.getFallDuration() : ConfigKeys.getSpawnFallDuration();
+        DropOptions options = DropOptions.createDefault().withExpiryTicks(expiryTicks).withFallDuration(fallDuration);
         World world = player.getWorld();
         Location centerLoc = player.getLocation();
 

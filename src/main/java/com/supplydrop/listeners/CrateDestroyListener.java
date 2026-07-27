@@ -9,6 +9,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 
 import com.supplydrop.Crate;
 import com.supplydrop.helpers.CrateManager;
+import com.supplydrop.helpers.HistoryManager;
 
 public class CrateDestroyListener implements Listener {
 
@@ -31,14 +32,17 @@ public class CrateDestroyListener implements Listener {
         // Not yet opened — determine destruction type based on crate conditions
         if (crate.isTeamCrate()) {
             // Team crate broken manually — punish: destroy items, no drop
+            HistoryManager.logEvent("DESTROY", crate.getDisplayName(), barrelLocation, null, "team_manual");
             crate.destroyTeamCrate();
             CrateManager.removeCrate(barrelLocation);
         } else if (crate.isTrapCrate()) {
             // Trap crate broken manually — fire trap, then destroy
+            HistoryManager.logEvent("DESTROY", crate.getDisplayName(), barrelLocation, null, "trap_manual");
             crate.destroyWithTrap();
             CrateManager.removeCrate(barrelLocation);
         } else {
             // Normal crate — drop items on ground
+            HistoryManager.logEvent("DESTROY", crate.getDisplayName(), barrelLocation, null, "normal");
             crate.destroyAndDropContents();
             CrateManager.removeCrate(barrelLocation);
         }

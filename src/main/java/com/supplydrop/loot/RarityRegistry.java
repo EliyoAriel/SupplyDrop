@@ -87,17 +87,6 @@ public class RarityRegistry {
         return Collections.unmodifiableList(orderedTiers);
     }
 
-    /**
-     * Get the total weight of all rarity tiers.
-     */
-    public static int getTotalWeight() {
-        return orderedTiers.stream().mapToInt(Rarity::weight).sum();
-    }
-
-    public static boolean has(String key) {
-        return key != null && tiers.containsKey(key.toLowerCase());
-    }
-
     public static void clear() {
         tiers.clear();
         orderedTiers.clear();

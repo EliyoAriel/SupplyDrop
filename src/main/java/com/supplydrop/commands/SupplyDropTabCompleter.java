@@ -1,8 +1,10 @@
 package com.supplydrop.commands;
 
 import com.supplydrop.SupplyDrop;
+import com.supplydrop.Crate;
 import com.supplydrop.config.ConfigKeys;
 import com.supplydrop.config.ConfigKeys.TemplateWeight;
+import com.supplydrop.helpers.CrateManager;
 import com.supplydrop.helpers.PermissionsHelper;
 import com.supplydrop.packages.PackageManager;
 
@@ -18,7 +20,7 @@ import java.util.Set;
 
 public class SupplyDropTabCompleter implements TabCompleter {
 
-    private static final List<String> ADMIN_SUB_COMMANDS = List.of("call", "spawn", "active", "db", "preview", "package", "templates", "reload", "version", "pause", "resume", "auto");
+    private static final List<String> ADMIN_SUB_COMMANDS = List.of("call", "spawn", "active", "db", "preview", "history", "package", "templates", "reload", "version", "pause", "resume", "auto", "subscribe", "unsubscribe", "toggle", "delete", "config");
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
@@ -58,6 +60,43 @@ public class SupplyDropTabCompleter implements TabCompleter {
                 }
             }
 
+            // /supplydrop history [page] [event:<type>] [player:<name>]
+            if (args.length >= 2 && args[0].equalsIgnoreCase("history")) {
+                if (PermissionsHelper.isAdmin(sender)) {
+                    String lastArg = args[args.length - 1].toLowerCase();
+                    if (lastArg.startsWith("event:")) {
+                        return List.of("event:SPAWN", "event:OPEN", "event:TRAP", "event:EXPIRE", "event:DESTROY");
+                    }
+                    if (lastArg.startsWith("player:")) {
+                        return List.of("player:");
+                    }
+                    if (args.length == 2) {
+                        return List.of("event:", "player:", "1", "2", "3");
+                    }
+                }
+            }
+
+            // /supplydrop toggle <type>
+            if (args.length == 2 && args[0].equalsIgnoreCase("toggle")) {
+                if (PermissionsHelper.isAdmin(sender)) {
+                    return List.of("hologram", "announce", "notify");
+                }
+            }
+
+            // /supplydrop delete <id|number|all>
+            if (args.length == 2 && args[0].equalsIgnoreCase("delete")) {
+                if (PermissionsHelper.isAdmin(sender)) {
+                    List<String> options = new ArrayList<>();
+                    options.add("all");
+                    List<Crate> active = CrateManager.getActiveCrates();
+                    for (int i = 0; i < active.size(); i++) {
+                        Crate crate = active.get(i);
+                        options.add(crate.getShortId());
+                    }
+                    return options;
+                }
+            }
+
             if (args.length == 2 && args[0].equalsIgnoreCase("package")) {
                 List<String> subcommands = new ArrayList<>();
                 if (PermissionsHelper.isAdmin(sender)) {
@@ -91,11 +130,11 @@ public class SupplyDropTabCompleter implements TabCompleter {
             if (args.length == 2 && args[0].equalsIgnoreCase("auto")) {
                 if (PermissionsHelper.isAdmin(sender)) {
                     return List.of("status", "enable", "disable", "pause", "resume",
-                                   "interval", "random-interval", "interval-min", "interval-max",
-                                   "world", "radius", "templates", "announce", "announce-delay",
+                                    "interval", "interval-min", "interval-max",
+                                    "world", "radius", "templates", "announce", "announce-delay",
                                    "announce-actionbar", "coord-reveal-delay", "wave-count",
-                                   "expiry", "team-crate", "trap-chance", "trap-mobs",
-                                   "loot-scaling", "escalating");
+                                    "expiry", "team-crate", "trap-chance", "trap-mobs",
+                                    "loot-scaling", "escalating", "fall-duration");
                 }
             }
 

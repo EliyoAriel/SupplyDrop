@@ -13,6 +13,7 @@ import com.supplydrop.hologram.Hologram;
 import com.supplydrop.helpers.AirdropLogger;
 import com.supplydrop.helpers.CrateManager;
 import com.supplydrop.helpers.DatabaseManager;
+import com.supplydrop.helpers.HistoryManager;
 import com.supplydrop.tasks.RenderFlareTask;
 import com.supplydrop.tasks.RenderLandingZoneTask;
 import com.supplydrop.tasks.RenderPackageGlowTask;
@@ -42,6 +43,7 @@ public class Crate {
         LANDED
     }
 
+    private UUID id;
     private final World world;
     private final ArrayList<ItemStack> contents;
     private State state;
@@ -79,6 +81,7 @@ public class Crate {
     }
 
     public Crate(Location location, World world, List<ItemStack> contents, DropOptions options, String displayName, boolean trapCrate) {
+        this.id = UUID.randomUUID();
         this.dropLocation = location.clone();
         this.world = world;
         this.contents = cloneContents(contents);
@@ -128,6 +131,13 @@ public class Crate {
         parachuteSystem.initialize(dropLocation, fallingCrate, plugin);
         CrateManager.addCrate(fallingCrate, this);
 
+        // Persist to database immediately (updated again on land)
+        DatabaseManager.save(dropLocation, displayName, trapCrate, teamCrateEnabled, requiredPlayers, id.toString());
+
+        // Log spawn event
+        HistoryManager.logEvent("SPAWN", displayName, dropLocation, null,
+                trapCrate ? "trap" : (teamCrateEnabled ? "team:" + requiredPlayers : "normal"));
+
         // Start landing zone marker
         if (ConfigKeys.isLandingZoneEnabled()) {
             int bx = dropLocation.getBlockX();
@@ -173,7 +183,7 @@ public class Crate {
         }
 
         CrateManager.addCrate(barrel.getLocation(), this);
-        DatabaseManager.save(landedLocation, displayName, trapCrate, teamCrateEnabled, requiredPlayers);
+        DatabaseManager.save(landedLocation, displayName, trapCrate, teamCrateEnabled, requiredPlayers, id.toString());
         SupplyDrop plugin = getEnabledPlugin();
 
         if (plugin != null && options.shouldShowLandingEffects()) {
@@ -203,6 +213,7 @@ public class Crate {
             expiryTask = Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (state == State.LANDED && !opened && !destroyed) {
                     // EXPIRED: server takes the loot, no drop
+                    HistoryManager.logEvent("EXPIRE", displayName, landedLocation, null, null);
                     destroy();
                     AirdropLogger.info("Crate expired and was destroyed (loot taken by server).");
                 }
@@ -361,10 +372,11 @@ public class Crate {
 
         List<String> mobs = ConfigKeys.getCrateTrapMobs();
         if (!mobs.isEmpty()) {
-            String mobType = mobs.get(new java.util.Random().nextInt(mobs.size()));
-            try {
-                EntityType entityType = EntityType.valueOf(mobType.toUpperCase());
-                for (int i = 0; i < 3; i++) {
+            java.util.Random rng = new java.util.Random();
+            for (int i = 0; i < 3; i++) {
+                String mobType = mobs.get(rng.nextInt(mobs.size()));
+                try {
+                    EntityType entityType = EntityType.valueOf(mobType.toUpperCase());
                     Location spawnLoc = landedLocation.clone().add(
                             (Math.random() - 0.5) * 3,
                             1,
@@ -372,9 +384,9 @@ public class Crate {
                     LivingEntity entity = (LivingEntity) world.spawnEntity(spawnLoc, entityType);
                     entity.setCustomName(ChatColor.translateAlternateColorCodes('&', "&c&lTrap!"));
                     entity.setCustomNameVisible(true);
+                } catch (IllegalArgumentException e) {
+                    AirdropLogger.warning("Invalid trap mob type: " + mobType);
                 }
-            } catch (IllegalArgumentException e) {
-                AirdropLogger.warning("Invalid trap mob type: " + mobType);
             }
         }
 
@@ -477,6 +489,8 @@ public class Crate {
 
     // ─── GETTERS / SETTERS ──────────────────────────────────────────
 
+    public UUID getId() { return id; }
+    public String getShortId() { return id.toString().substring(0, 8); }
     public State getState() { return state; }
     public FallingBlock getFallingCrate() { return fallingCrate; }
     public Location getLocation() { return state == State.FALLING ? dropLocation : landedLocation; }
@@ -509,10 +523,11 @@ public class Crate {
     /**
      * Create a crate from persisted data (no contents, just tracking).
      */
-    public static Crate createPersisted(Location location, String displayName, boolean trapCrate,
+    public static Crate createPersisted(UUID id, Location location, String displayName, boolean trapCrate,
                                         boolean isTeamCrate, int requiredPlayers) {
         Crate crate = new Crate(location, location.getWorld(), new ArrayList<>(),
                 DropOptions.createDefault(), displayName, trapCrate);
+        crate.id = id;
         crate.state = State.LANDED;
         crate.landedLocation = location.clone();
         crate.blockChest = location.getBlock();

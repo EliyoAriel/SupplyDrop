@@ -1,6 +1,5 @@
 package com.supplydrop.tasks;
 
-import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.World;
@@ -39,12 +38,7 @@ public class RenderLandingZoneTask extends BukkitRunnable {
             double z = center.getZ() + radius * Math.sin(angle);
             Location point = new Location(world, x, y, z);
 
-            // Pulse effect — particles alternate brightness
-            if (tick % 2 == 0) {
-                world.spawnParticle(particle, point, 1, 0, 0, 0, 0.01);
-            } else {
-                world.spawnParticle(particle, point, 1, 0, 0, 0, 0.01);
-            }
+            world.spawnParticle(particle, point, 1, 0, 0, 0, 0.01);
         }
 
         // Center marker — vertical column

@@ -7,11 +7,11 @@ import com.supplydrop.exceptions.SkyNotClearException;
 import com.supplydrop.helpers.AirdropLogger;
 import com.supplydrop.helpers.ChatHandler;
 import com.supplydrop.helpers.ChatTheme;
+import com.supplydrop.helpers.NotificationManager;
 import com.supplydrop.packages.Package;
 import com.supplydrop.packages.PackageManager;
 
-import net.md_5.bungee.api.ChatMessageType;
-import net.md_5.bungee.api.chat.TextComponent;
+import net.kyori.adventure.text.Component;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -68,7 +68,11 @@ public class AutoDropScheduler {
         if (ConfigKeys.isAutoDropRandomInterval()) {
             int min = ConfigKeys.getAutoDropIntervalMin();
             int max = ConfigKeys.getAutoDropIntervalMax();
-            interval = min + random.nextInt(Math.max(1, max - min + 1));
+            if (min > 0 && max > min) {
+                interval = min + random.nextInt(Math.max(1, max - min + 1));
+            } else {
+                interval = ConfigKeys.getAutoDropInterval();
+            }
         } else {
             interval = ConfigKeys.getAutoDropInterval();
         }
@@ -97,40 +101,34 @@ public class AutoDropScheduler {
         Location spawnLoc = getRandomLocation(world, radius);
 
         // Announce
-        if (ConfigKeys.isAutoDropAnnounce()) {
+        if (ConfigKeys.isAnnouncementEnabled() && ConfigKeys.isAutoDropAnnounce()) {
             int delay = ConfigKeys.getAutoDropAnnounceDelay();
             boolean actionbar = ConfigKeys.isAutoDropAnnounceActionbar();
             int coordDelay = ConfigKeys.getAutoDropCoordRevealDelay();
 
             if (actionbar) {
                 // Actionbar: show immediately, no coords
-                String actionbarMsg = formatColor("&e&lSupply Drop &b" + pkg.getDisplayName() + " &eincoming!");
+                Component actionbarMsg = Component.text("§e§lSupply Drop §b" + pkg.getDisplayName() + " §eincoming!");
                 for (Player p : world.getPlayers()) {
-                    p.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(actionbarMsg));
+                    p.sendActionBar(actionbarMsg);
                 }
             } else {
-                // Chat announcement
+                // Chat announcement via NotificationManager
                 if (coordDelay > 0) {
                     // Announce without coords first
-                    String noLocMsg = formatMessage("&bSupply drop &e" + pkg.getDisplayName() + " &bincoming! Coordinates revealed in &e" + formatTime(coordDelay) + "&b!");
-                    for (Player p : world.getPlayers()) {
-                        p.sendMessage(noLocMsg);
-                    }
+                    String noLocMsg = "&bSupply drop &e" + pkg.getDisplayName() + " &bincoming! Coordinates revealed in &e" + formatTime(coordDelay) + "&b!";
+                    NotificationManager.notify(worldName, noLocMsg);
                     // Reveal coords after delay
                     Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                        String coordMsg = formatMessage("&bSupply drop &e" + pkg.getDisplayName() + " &bat &e" +
-                                spawnLoc.getBlockX() + ", " + spawnLoc.getBlockZ() + "&b!");
-                        for (Player p : world.getPlayers()) {
-                            p.sendMessage(coordMsg);
-                        }
+                        String coordMsg = "&bSupply drop &e" + pkg.getDisplayName() + " &bat &e" +
+                                spawnLoc.getBlockX() + ", " + spawnLoc.getBlockZ() + "&b!";
+                        NotificationManager.notify(worldName, coordMsg);
                     }, coordDelay);
                 } else {
                     // Announce with coords immediately
-                    String msg = formatMessage("&bSupply drop &e" + pkg.getDisplayName() + " &bincoming at &e" +
-                            spawnLoc.getBlockX() + ", " + spawnLoc.getBlockZ() + "&b!");
-                    for (Player p : world.getPlayers()) {
-                        p.sendMessage(msg);
-                    }
+                    String msg = "&bSupply drop &e" + pkg.getDisplayName() + " &bincoming at &e" +
+                            spawnLoc.getBlockX() + ", " + spawnLoc.getBlockZ() + "&b!";
+                    NotificationManager.notify(worldName, msg);
                 }
             }
 
@@ -197,23 +195,6 @@ public class AutoDropScheduler {
         int x = centerX + random.nextInt(-radius, radius + 1);
         int z = centerZ + random.nextInt(-radius, radius + 1);
         return new Location(world, x + 0.5, 0, z + 0.5);
-    }
-
-    private String formatMessage(String message) {
-        String prefix = ChatTheme.primary() + "[" + ChatTheme.text() + "SupplyDrop" + ChatTheme.primary() + "]"
-                + ChatTheme.primary() + " ";
-        String themed = message
-                .replace("{primary}", ChatTheme.primary().toString())
-                .replace("{text}", ChatTheme.text().toString())
-                .replace("{accent}", ChatTheme.accent().toString())
-                .replace("{success}", ChatTheme.success().toString())
-                .replace("{warning}", ChatTheme.warning().toString())
-                .replace("{error}", ChatTheme.error().toString());
-        return org.bukkit.ChatColor.translateAlternateColorCodes('&', prefix + themed);
-    }
-
-    private String formatColor(String message) {
-        return org.bukkit.ChatColor.translateAlternateColorCodes('&', message);
     }
 
     private String formatTime(int ticks) {

@@ -36,6 +36,7 @@ public class TemplateRarityGui implements Listener {
 
     private static final int INVENTORY_SIZE = 45;
     private static final int BACK_SLOT = 39;
+    private static final int SETTINGS_SLOT = 40;
     private static final int DELETE_SLOT = 41;
 
     private static final Material[] TIER_MATERIALS = {
@@ -99,6 +100,21 @@ public class TemplateRarityGui implements Listener {
         }
         inv.setItem(BACK_SLOT, backBtn);
 
+        // Settings button
+        ItemStack settingsBtn = new ItemStack(Material.CRAFTER);
+        ItemMeta settingsMeta = settingsBtn.getItemMeta();
+        if (settingsMeta != null) {
+            settingsMeta.setDisplayName("§eTemplate Settings");
+            settingsMeta.setLore(List.of(
+                    "§7Display name: §f" + pkg.getDisplayName(),
+                    "§7Fall duration: §f" + (pkg.getFallDuration() > 0 ? pkg.getFallDuration() + "s" : "global"),
+                    "",
+                    "§aClick to configure"
+            ));
+            settingsBtn.setItemMeta(settingsMeta);
+        }
+        inv.setItem(SETTINGS_SLOT, settingsBtn);
+
         // Delete button
         ItemStack deleteBtn = new ItemStack(Material.RED_WOOL);
         ItemMeta deleteMeta = deleteBtn.getItemMeta();
@@ -134,6 +150,14 @@ public class TemplateRarityGui implements Listener {
                 p.closeInventory();
                 listGui.openInventory(p);
             });
+            return;
+        }
+
+        // Settings button
+        if (clicked.getType() == Material.CRAFTER) {
+            TemplateSettingsGui settingsGui = new TemplateSettingsGui(pkg);
+            Bukkit.getPluginManager().registerEvents(settingsGui, SupplyDrop.getPluginInstance());
+            Bukkit.getScheduler().runTask(SupplyDrop.getPluginInstance(), () -> settingsGui.openInventory(p));
             return;
         }
 

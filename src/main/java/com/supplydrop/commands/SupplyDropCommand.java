@@ -8,9 +8,12 @@ import com.supplydrop.controllers.DropController;
 import com.supplydrop.exceptions.SkyNotClearException;
 import com.supplydrop.gui.PreviewGui;
 import com.supplydrop.gui.TemplateListGui;
+import com.supplydrop.gui.config.ConfigMainMenu;
 import com.supplydrop.helpers.ChatHandler;
 import com.supplydrop.helpers.CrateManager;
 import com.supplydrop.helpers.DatabaseManager;
+import com.supplydrop.helpers.HistoryManager;
+import com.supplydrop.helpers.NotificationManager;
 import com.supplydrop.helpers.PermissionsHelper;
 import com.supplydrop.loot.LootTable;
 import com.supplydrop.packages.Package;
@@ -19,6 +22,7 @@ import com.supplydrop.packages.PackageManager;
 import com.supplydrop.Crate;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -40,6 +44,7 @@ public class SupplyDropCommand implements CommandExecutor {
                 case "active" -> handleActiveCommand(sender);
                 case "db" -> handleDbCommand(sender);
                 case "preview" -> handlePreviewCommand(sender, args);
+                case "history" -> handleHistoryCommand(sender, args);
                 case "package" -> handlePackageSubcommand(sender, args);
                 case "templates" -> handleTemplatesCommand(sender);
                 case "reload" -> handleReloadSubcommand(sender);
@@ -47,6 +52,11 @@ public class SupplyDropCommand implements CommandExecutor {
                 case "pause" -> handlePauseCommand(sender, true);
                 case "resume" -> handlePauseCommand(sender, false);
                 case "auto" -> handleAutoCommand(sender, args);
+                case "subscribe" -> handleSubscribeCommand(sender, true);
+                case "unsubscribe" -> handleSubscribeCommand(sender, false);
+                case "toggle" -> handleToggleCommand(sender, args);
+                case "delete" -> handleDeleteCommand(sender, args);
+                case "config" -> handleConfigCommand(sender);
                 default -> handleCallNamedCommand(sender, args);
             }
         } catch (Exception e) {
@@ -91,16 +101,61 @@ public class SupplyDropCommand implements CommandExecutor {
             return;
         }
 
-        ChatHandler.send(sender, "&bActive Supply Crates &7(" + activeCrates.size() + "):");
-        for (Crate crate : activeCrates) {
+        int maxActive = ConfigKeys.getCrateMaxActive();
+        String limitStr = maxActive > 0 ? " &7/&e" + maxActive : "";
+        ChatHandler.send(sender, "&bActive Supply Crates &7(" + activeCrates.size() + limitStr + "&7):");
+        for (int i = 0; i < activeCrates.size(); i++) {
+            Crate crate = activeCrates.get(i);
             String name = crate.getDisplayName() != null ? crate.getDisplayName() : "Unknown";
-            String loc = crate.getLandedLocation() != null
-                    ? crate.getLandedLocation().getWorld().getName() + " "
-                      + crate.getLandedLocation().getBlockX() + " "
-                      + crate.getLandedLocation().getBlockY() + " "
-                      + crate.getLandedLocation().getBlockZ()
-                    : "Falling";
-            ChatHandler.send(sender, " &e" + name + " &7- &f" + loc);
+            String shortId = crate.getShortId();
+            Location landed = crate.getLandedLocation();
+            if (landed != null && sender instanceof Player player) {
+                String worldName = landed.getWorld().getName();
+                int x = landed.getBlockX();
+                int y = landed.getBlockY();
+                int z = landed.getBlockZ();
+                String cmd = "/tp " + player.getName() + " " + x + " " + y + " " + z;
+                String hoverText = "Click to teleport to " + name;
+
+                net.kyori.adventure.text.Component msg = net.kyori.adventure.text.Component.empty()
+                    .append(net.kyori.adventure.text.Component.text(" "))
+                    .append(net.kyori.adventure.text.Component.text("[" + shortId + "]", net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY))
+                    .append(net.kyori.adventure.text.Component.text(" " + name, net.kyori.adventure.text.format.NamedTextColor.GOLD))
+                    .append(net.kyori.adventure.text.Component.text(" - ", net.kyori.adventure.text.format.NamedTextColor.GRAY))
+                    .append(net.kyori.adventure.text.Component.text(worldName + " " + x + " " + y + " " + z, net.kyori.adventure.text.format.NamedTextColor.WHITE)
+                        .hoverEvent(net.kyori.adventure.text.event.HoverEvent.showText(
+                            net.kyori.adventure.text.Component.text(hoverText, net.kyori.adventure.text.format.NamedTextColor.GOLD)))
+                        .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand(cmd)));
+                player.sendMessage(msg);
+            } else {
+                Location fallback = landed != null ? landed : crate.getDropLocation();
+                if (fallback != null && sender instanceof Player player) {
+                    String worldName = fallback.getWorld().getName();
+                    int x = fallback.getBlockX();
+                    int z = fallback.getBlockZ();
+                    int y = fallback.getWorld().getHighestBlockYAt(x, z) + 1;
+                    String cmd = "/tp " + player.getName() + " " + x + " " + y + " " + z;
+                    String status = landed != null ? "" : " §e[Falling]";
+                    String hoverText = "Click to teleport to " + name;
+
+                    net.kyori.adventure.text.Component msg = net.kyori.adventure.text.Component.empty()
+                        .append(net.kyori.adventure.text.Component.text(" "))
+                        .append(net.kyori.adventure.text.Component.text("[" + shortId + "]", net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY))
+                        .append(net.kyori.adventure.text.Component.text(" " + name, net.kyori.adventure.text.format.NamedTextColor.GOLD))
+                        .append(net.kyori.adventure.text.Component.text(status, net.kyori.adventure.text.format.NamedTextColor.YELLOW))
+                        .append(net.kyori.adventure.text.Component.text(" - ", net.kyori.adventure.text.format.NamedTextColor.GRAY))
+                        .append(net.kyori.adventure.text.Component.text(worldName + " " + x + " " + z, net.kyori.adventure.text.format.NamedTextColor.WHITE)
+                            .hoverEvent(net.kyori.adventure.text.event.HoverEvent.showText(
+                                net.kyori.adventure.text.Component.text(hoverText, net.kyori.adventure.text.format.NamedTextColor.GOLD)))
+                            .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand(cmd)));
+                    player.sendMessage(msg);
+                } else {
+                    String loc = fallback != null
+                            ? fallback.getWorld().getName() + " " + fallback.getBlockX() + " " + fallback.getBlockZ()
+                            : "Unknown";
+                    ChatHandler.send(sender, " &8[" + shortId + "] &e" + name + " &7- &f" + loc);
+                }
+            }
         }
     }
 
@@ -272,6 +327,87 @@ public class SupplyDropCommand implements CommandExecutor {
         } catch (SkyNotClearException e) {
             ChatHandler.sendError(player, "Sky must be clear above your location to call a supply drop.");
         }
+    }
+
+    // ─── /supplydrop history ───────────────────────────────────────
+    // Usage: /supplydrop history [page] [event:<type>] [player:<name>]
+
+    private void handleHistoryCommand(CommandSender sender, String[] args) {
+        if (!PermissionsHelper.isAdmin(sender)) {
+            ChatHandler.sendError(sender, "You must have &bsupplydrop.admin &cpermission to do this.");
+            return;
+        }
+
+        int page = 1;
+        int perPage = 10;
+        String filterEvent = null;
+        String filterPlayer = null;
+
+        for (int i = 1; i < args.length; i++) {
+            String arg = args[i].toLowerCase();
+            if (arg.startsWith("event:")) {
+                filterEvent = arg.substring(6);
+            } else if (arg.startsWith("player:")) {
+                filterPlayer = arg.substring(7);
+            } else {
+                try {
+                    page = Math.max(1, Integer.parseInt(arg));
+                } catch (NumberFormatException e) {
+                    ChatHandler.sendError(sender, "Invalid page number: &c" + arg);
+                    return;
+                }
+            }
+        }
+
+        int total = HistoryManager.count(filterEvent, filterPlayer);
+        int totalPages = Math.max(1, (int) Math.ceil((double) total / perPage));
+        page = Math.min(page, totalPages);
+
+        List<HistoryManager.HistoryRecord> history = HistoryManager.query(page, perPage, filterEvent, filterPlayer);
+
+        StringBuilder header = new StringBuilder();
+        header.append("&9━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        header.append("&f  &b&lSupplyDrop History &7(Page &f").append(page).append("&7/&f").append(totalPages).append("&7, &f").append(total).append(" &7total)\n");
+        header.append("&9━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+        if (filterEvent != null || filterPlayer != null) {
+            header.append("&7  Filters: ");
+            if (filterEvent != null) header.append("&eevent:&f").append(filterEvent).append(" ");
+            if (filterPlayer != null) header.append("&eplayer:&f").append(filterPlayer);
+            header.append("\n");
+        }
+
+        if (history.isEmpty()) {
+            header.append("&7  No history records found.\n");
+        } else {
+            for (HistoryManager.HistoryRecord record : history) {
+                String eventColor = switch (record.event()) {
+                    case "SPAWN" -> "&aSPAWN";
+                    case "OPEN" -> "&bOPEN";
+                    case "TRAP" -> "&cTRAP";
+                    case "EXPIRE" -> "&4EXPIRE";
+                    case "DESTROY" -> "&eDESTROY";
+                    default -> "&7" + record.event();
+                };
+                String template = record.template() != null ? record.template() : "?";
+                String player = record.player() != null ? " &7by &f" + record.player() : "";
+                String extra = record.extra() != null ? " &8(" + record.extra() + ")" : "";
+                String loc = record.world() != null
+                        ? " &8@ " + record.world() + " " + record.x() + " " + record.z()
+                        : "";
+
+                header.append(" ").append(eventColor).append(" &7").append(template)
+                        .append(player).append(extra).append(loc).append("\n");
+            }
+        }
+
+        header.append("&9━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        header.append("&7  &e/supplydrop history <page> &8- &7next page\n");
+        header.append("&7  &e/supplydrop history event:<type> &8- &7filter by event\n");
+        header.append("&7  &e/supplydrop history player:<name> &8- &7filter by player\n");
+        header.append("&9━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+        ChatHandler.sendWithoutPrefix(sender, header.toString());
     }
 
     private void handlePackageSubcommand(CommandSender sender, String[] args) {
@@ -450,6 +586,131 @@ public class SupplyDropCommand implements CommandExecutor {
         plugin.restartAutoDropScheduler();
     }
 
+    private void handleSubscribeCommand(CommandSender sender, boolean subscribe) {
+        if (!(sender instanceof Player player)) {
+            ChatHandler.sendError(sender, "Must be a player to use this command.");
+            return;
+        }
+
+        java.sql.Connection conn = HistoryManager.getConnection();
+        if (conn == null) {
+            ChatHandler.sendError(sender, "Database not available.");
+            return;
+        }
+
+        NotificationManager.setSubscribed(conn, player.getUniqueId(), subscribe);
+
+        if (subscribe) {
+            NotificationManager.notifyPlayer(player, "&aSubscribed &7to supply drop notifications.");
+        } else {
+            NotificationManager.notifyPlayer(player, "&cUnsubscribed &7from supply drop notifications.");
+        }
+    }
+
+    private void handleToggleCommand(CommandSender sender, String[] args) {
+        if (!PermissionsHelper.isAdmin(sender)) {
+            ChatHandler.sendError(sender, "You must have &bsupplydrop.admin &cpermission to do this.");
+            return;
+        }
+
+        if (args.length < 2) {
+            ChatHandler.sendError(sender, "Usage: /supplydrop toggle <hologram|announce|notify>");
+            return;
+        }
+
+        Config config = SupplyDrop.getConfiguration();
+        if (config == null) {
+            ChatHandler.sendError(sender, "Cannot modify config right now.");
+            return;
+        }
+
+        switch (args[1].toLowerCase()) {
+            case "hologram" -> {
+                boolean current = ConfigKeys.isHologramEnabled();
+                config.getConfig().set(ConfigKeys.HOLOGRAM_ENABLED, !current);
+                config.saveConfig();
+                ChatHandler.send(sender, "Hologram &b" + (!current ? "&aenabled" : "&cdisabled") + "&7.");
+            }
+            case "announce" -> {
+                boolean current = ConfigKeys.isAnnouncementEnabled();
+                config.getConfig().set(ConfigKeys.ANNOUNCE_ENABLED, !current);
+                config.saveConfig();
+                ChatHandler.send(sender, "Announcements &b" + (!current ? "&aenabled" : "&cdisabled") + "&7.");
+            }
+            case "notify" -> {
+                boolean current = ConfigKeys.isNotificationDefaultSubscribe();
+                config.getConfig().set(ConfigKeys.NOTIFICATION_DEFAULT_SUBSCRIBE, !current);
+                config.saveConfig();
+                ChatHandler.send(sender, "Notification default &b" + (!current ? "&aenabled" : "&cdisabled") + "&7.");
+            }
+            default -> ChatHandler.sendError(sender, "Unknown toggle: &c" + args[1] + "&7. Use hologram, announce, or notify.");
+        }
+    }
+
+    private void handleDeleteCommand(CommandSender sender, String[] args) {
+        if (!PermissionsHelper.isAdmin(sender)) {
+            ChatHandler.sendError(sender, "You must have &bsupplydrop.admin &cpermission to do this.");
+            return;
+        }
+
+        List<Crate> activeCrates = CrateManager.getActiveCrates();
+        if (activeCrates.isEmpty()) {
+            ChatHandler.send(sender, "&7No active supply crates to delete.");
+            return;
+        }
+
+        if (args.length < 2) {
+            ChatHandler.sendError(sender, "Usage: /supplydrop delete <id|number|all>");
+            ChatHandler.sendError(sender, "Use &e/supplydrop active &cto see IDs.");
+            return;
+        }
+
+        String input = args[1].toLowerCase();
+
+        // /supplydrop delete all
+        if (input.equals("all")) {
+            int count = activeCrates.size();
+            for (Crate crate : new ArrayList<>(activeCrates)) {
+                Location loc = crate.getLandedLocation();
+                crate.destroy();
+                DatabaseManager.remove(loc != null ? loc : crate.getDropLocation());
+            }
+            ChatHandler.send(sender, "&cDeleted &e" + count + " &csupplydrop(s).");
+            return;
+        }
+
+        // Try short UUID match first
+        Crate matched = null;
+        for (Crate crate : activeCrates) {
+            if (crate.getShortId().equals(input)) {
+                matched = crate;
+                break;
+            }
+        }
+
+        // Fallback: try index number
+        if (matched == null) {
+            try {
+                int index = Integer.parseInt(input) - 1;
+                if (index >= 0 && index < activeCrates.size()) {
+                    matched = activeCrates.get(index);
+                }
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (matched == null) {
+            ChatHandler.sendError(sender, "No crate found with ID or number &c" + input + "&c.");
+            ChatHandler.sendError(sender, "Use &e/supplydrop active &cto see IDs.");
+            return;
+        }
+
+        Location loc = matched.getLandedLocation();
+        String name = matched.getDisplayName() != null ? matched.getDisplayName() : "Unknown";
+        matched.destroy();
+        DatabaseManager.remove(loc != null ? loc : matched.getDropLocation());
+        ChatHandler.send(sender, "&cDeleted &e" + name + " &c(" + matched.getShortId() + ").");
+    }
+
     private void handleVersionSubcommand(CommandSender sender) {
         String version = SupplyDrop.getPluginVersion() != null ? SupplyDrop.getPluginVersion() : "unknown";
         ChatHandler.sendWithoutPrefix(sender,
@@ -457,6 +718,20 @@ public class SupplyDropCommand implements CommandExecutor {
                 "&f  SupplyDrop &bv" + version + "\n" +
                 "&f  Paper API &b1.21+\n" +
                 "&9━━━━━━━━━━━━━━━━━━━━━━━━");
+    }
+
+    private void handleConfigCommand(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            ChatHandler.sendError(sender, "Must be a player to use the config GUI.");
+            return;
+        }
+        if (!PermissionsHelper.isAdmin(sender)) {
+            ChatHandler.sendError(sender, "You must have &bsupplydrop.admin &cpermission to do this.");
+            return;
+        }
+
+        ConfigMainMenu gui = new ConfigMainMenu();
+        gui.openInventory(player);
     }
 
     // ─── /supplydrop auto ────────────────────────────────────────────
@@ -478,7 +753,6 @@ public class SupplyDropCommand implements CommandExecutor {
             case "pause"         -> handleAutoPause(sender, true);
             case "resume"        -> handleAutoPause(sender, false);
             case "interval"      -> handleAutoInterval(sender, args);
-            case "random-interval" -> handleAutoRandomInterval(sender, args);
             case "interval-min"  -> handleAutoIntervalMin(sender, args);
             case "interval-max"  -> handleAutoIntervalMax(sender, args);
             case "world"         -> handleAutoWorld(sender, args);
@@ -494,7 +768,7 @@ public class SupplyDropCommand implements CommandExecutor {
             case "trap-chance"   -> handleAutoTrapChance(sender, args);
             case "trap-mobs"     -> handleAutoTrapMobs(sender, args);
             case "loot-scaling"  -> handleAutoLootScaling(sender, args);
-            case "escalating"    -> handleAutoEscalating(sender, args);
+            case "fall-duration" -> handleAutoFallDuration(sender, args);
             default -> handleAutoHelp(sender);
         }
     }
@@ -510,7 +784,6 @@ public class SupplyDropCommand implements CommandExecutor {
                 "&e pause &8- &7Pause scheduler\n" +
                 "&e resume &8- &7Resume scheduler\n" +
                 "&e interval <ticks> &8- &7Set fixed interval\n" +
-                "&e random-interval <true|false> &8- &7Toggle random interval\n" +
                 "&e interval-min <ticks> &8- &7Set min interval\n" +
                 "&e interval-max <ticks> &8- &7Set max interval\n" +
                 "&e world <name> &8- &7Set target world\n" +
@@ -523,11 +796,12 @@ public class SupplyDropCommand implements CommandExecutor {
                 "&e coord-reveal-delay <ticks> &8- &7Coord reveal delay\n" +
                 "&e wave-count <count> &8- &7Crates per drop\n" +
                 "&e expiry <ticks> &8- &7Crate auto-destroy\n" +
+                "&e fall-duration <seconds> &8- &7Fall duration\n" +
                 "&e team-crate <percent> &8- &7Team crate chance\n" +
                 "&e trap-chance <percent> &8- &7Trap crate chance\n" +
                 "&e trap-mobs <type> &8- &7Set trap mob type\n" +
                 "&e loot-scaling <true|false> &8- &7Loot scaling\n" +
-                "&e escalating <true|false> &8- &7Escalating rarity\n" +
+                "&e fall-duration <seconds> &8- &7Fall duration\n" +
                 "&9━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     }
 
@@ -543,6 +817,7 @@ public class SupplyDropCommand implements CommandExecutor {
         int radius      = ConfigKeys.getAutoDropRandomRadius();
         boolean announce = ConfigKeys.isAutoDropAnnounce();
         int delay       = ConfigKeys.getAutoDropAnnounceDelay();
+        int fallDur     = ConfigKeys.getAutoDropFallDuration();
 
         List<TemplateWeight> templates = ConfigKeys.getAutoDropTemplates();
         StringBuilder tplStr = new StringBuilder();
@@ -564,6 +839,7 @@ public class SupplyDropCommand implements CommandExecutor {
                 "&e Templates:   &f" + (tplStr.isEmpty() ? "&cNone" : tplStr) + "\n" +
                 "&e Announce:    &f" + (announce ? "&aYes" : "&cNo") + "\n" +
                 "&e Ann. Delay:  &f" + delay + " ticks\n" +
+                "&e Fall Dur:    &f" + (fallDur > 0 ? fallDur + "s" : "disabled") + "\n" +
                 "&9━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     }
 
@@ -857,28 +1133,6 @@ public class SupplyDropCommand implements CommandExecutor {
         plugin.restartAutoDropScheduler();
     }
 
-    private void handleAutoRandomInterval(CommandSender sender, String[] args) {
-        if (args.length < 3) {
-            ChatHandler.sendError(sender, "Usage: /supplydrop auto random-interval <true|false>");
-            return;
-        }
-        String value = args[2].toLowerCase();
-        if (!value.equals("true") && !value.equals("false")) {
-            ChatHandler.sendError(sender, "Value must be &btrue &cor &cfalse&c.");
-            return;
-        }
-        boolean enabled = value.equals("true");
-
-        Config config = SupplyDrop.getConfiguration();
-        SupplyDrop plugin = SupplyDrop.getPluginInstance();
-        if (config == null || plugin == null) return;
-
-        config.getConfig().set(ConfigKeys.AUTO_DROP_RANDOM_INTERVAL, enabled);
-        config.saveConfig();
-        ChatHandler.send(sender, "Random interval set to &b" + (enabled ? "enabled" : "disabled") + "&7.");
-        plugin.restartAutoDropScheduler();
-    }
-
     private void handleAutoIntervalMin(CommandSender sender, String[] args) {
         if (args.length < 3) {
             ChatHandler.sendError(sender, "Usage: /supplydrop auto interval-min <ticks>");
@@ -1144,25 +1398,35 @@ public class SupplyDropCommand implements CommandExecutor {
         plugin.restartAutoDropScheduler();
     }
 
-    private void handleAutoEscalating(CommandSender sender, String[] args) {
+    private void handleAutoFallDuration(CommandSender sender, String[] args) {
         if (args.length < 3) {
-            ChatHandler.sendError(sender, "Usage: /supplydrop auto escalating <true|false>");
+            ChatHandler.sendError(sender, "Usage: /supplydrop auto fall-duration <seconds>");
+            ChatHandler.sendError(sender, "Use &e0 &cto disable.");
             return;
         }
-        String value = args[2].toLowerCase();
-        if (!value.equals("true") && !value.equals("false")) {
-            ChatHandler.sendError(sender, "Value must be &btrue &cor &cfalse&c.");
+        int ticks;
+        try {
+            ticks = Integer.parseInt(args[2]);
+        } catch (NumberFormatException e) {
+            ChatHandler.sendError(sender, "Invalid number: &c" + args[2]);
             return;
         }
-        boolean enabled = value.equals("true");
+        if (ticks < 0) {
+            ChatHandler.sendError(sender, "Value must be &e0 &cor positive&c.");
+            return;
+        }
 
         Config config = SupplyDrop.getConfiguration();
         SupplyDrop plugin = SupplyDrop.getPluginInstance();
         if (config == null || plugin == null) return;
 
-        config.getConfig().set(ConfigKeys.AUTO_DROP_ESCALATING, enabled);
+        config.getConfig().set(ConfigKeys.AUTO_DROP_FALL_DURATION, ticks);
         config.saveConfig();
-        ChatHandler.send(sender, "Auto-drop escalating set to &b" + (enabled ? "enabled" : "disabled") + "&7.");
+        if (ticks == 0) {
+            ChatHandler.send(sender, "Auto-drop fall duration &cdisabled&7.");
+        } else {
+            ChatHandler.send(sender, "Auto-drop fall duration set to &b" + ticks + "s&7.");
+        }
         plugin.restartAutoDropScheduler();
     }
 }

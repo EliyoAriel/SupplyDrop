@@ -37,7 +37,8 @@ public class PackageManager {
             LootTable table = lootManager.getTable(name);
             if (table != null) {
                 String displayName = lootManager.getDisplayName(name);
-                packages.put(name, new Package(name, table, displayName));
+                int fallDuration = lootManager.getFallDuration(name);
+                packages.put(name, new Package(name, table, displayName, fallDuration));
             }
         }
 
@@ -76,6 +77,15 @@ public class PackageManager {
         Package pkg = packages.get(name);
         if (pkg != null) {
             pkg.setDisplayName(displayName);
+        }
+        saveConfig();
+    }
+
+    public static void setFallDuration(String name, int fallDuration) {
+        lootManager.setFallDuration(name, fallDuration);
+        Package pkg = packages.get(name);
+        if (pkg != null) {
+            pkg.setFallDuration(fallDuration);
         }
         saveConfig();
     }

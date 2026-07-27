@@ -1,13 +1,9 @@
 package com.supplydrop.packages;
 
-import com.supplydrop.loot.LootEntry;
 import com.supplydrop.loot.LootTable;
-import com.supplydrop.loot.Rarity;
-import com.supplydrop.loot.RarityRegistry;
 
 import org.bukkit.inventory.ItemStack;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -19,15 +15,21 @@ public class Package {
     private final String name;
     private final LootTable lootTable;
     private String displayName;
+    private int fallDuration;
 
     public Package(String name, LootTable lootTable) {
-        this(name, lootTable, null);
+        this(name, lootTable, null, 0);
     }
 
     public Package(String name, LootTable lootTable, String displayName) {
+        this(name, lootTable, displayName, 0);
+    }
+
+    public Package(String name, LootTable lootTable, String displayName, int fallDuration) {
         this.name = name;
         this.lootTable = lootTable;
         this.displayName = displayName;
+        this.fallDuration = fallDuration;
     }
 
     public String getName() { return name; }
@@ -41,8 +43,12 @@ public class Package {
         this.displayName = displayName;
     }
 
-    public boolean hasCustomDisplayName() {
-        return displayName != null && !displayName.isEmpty();
+    public int getFallDuration() {
+        return fallDuration;
+    }
+
+    public void setFallDuration(int fallDuration) {
+        this.fallDuration = fallDuration;
     }
 
     /**
@@ -56,19 +62,6 @@ public class Package {
      * Get info about this package's loot table.
      */
     public String getInfo() {
-        StringBuilder sb = new StringBuilder();
-        for (Rarity rarity : RarityRegistry.getAll()) {
-            List<LootEntry> entries = lootTable.getEntriesByRarity(rarity);
-            if (entries.isEmpty()) continue;
-            sb.append(rarity.prefix()).append(rarity.key().toUpperCase()).append(": ");
-            List<String> names = new ArrayList<>();
-            for (LootEntry entry : entries) {
-                String itemName = entry.getItem().getType().name();
-                int amount = entry.getItem().getAmount();
-                names.add(itemName + " x" + amount);
-            }
-            sb.append(String.join(", ", names)).append("\n");
-        }
-        return sb.toString();
+        return lootTable.getInfo();
     }
 }

@@ -1,5 +1,6 @@
 package com.supplydrop;
 
+import com.supplydrop.helpers.AirdropLogger;
 import com.supplydrop.helpers.ChatHandler;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -32,7 +33,7 @@ public class PackagesConfig {
         config = new YamlConfiguration();
         writeDefaults();
         saveConfig();
-        ChatHandler.logMessage("Packages configuration created with default loot tables.");
+        AirdropLogger.info("Packages configuration created with default loot tables.");
     }
 
     private void writeDefaults() {

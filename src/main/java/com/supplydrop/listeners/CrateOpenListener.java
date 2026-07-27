@@ -13,10 +13,12 @@ import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.scheduler.BukkitTask;
 
 import com.supplydrop.SupplyDrop;
+import com.supplydrop.controllers.DropController;
 import com.supplydrop.Crate;
 import com.supplydrop.helpers.AirdropLogger;
 import com.supplydrop.helpers.ChatHandler;
 import com.supplydrop.helpers.CrateManager;
+import com.supplydrop.helpers.HistoryManager;
 
 import java.util.HashMap;
 import java.util.List;
@@ -45,6 +47,13 @@ public class CrateOpenListener implements Listener {
         }
 
         crate.setOpened(true);
+
+        // Reset loot scaling counter
+        DropController.markLootCollected();
+
+        // Log event
+        HistoryManager.logEvent(crate.isTrapCrate() ? "TRAP" : "OPEN",
+                crate.getDisplayName(), barrelLocation, player.getName(), null);
 
         // Broadcast team crate contributors
         if (crate.isTeamCrate()) {

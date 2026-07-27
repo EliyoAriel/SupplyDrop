@@ -12,6 +12,9 @@ import com.supplydrop.helpers.ChatHandler;
 import com.supplydrop.helpers.ChatTheme;
 import com.supplydrop.helpers.CrateManager;
 import com.supplydrop.helpers.DatabaseManager;
+import com.supplydrop.helpers.HistoryManager;
+import com.supplydrop.helpers.AirdropLogger;
+import com.supplydrop.helpers.NotificationManager;
 import com.supplydrop.listeners.AntiGriefListener;
 import com.supplydrop.listeners.CrateCleanupListener;
 import com.supplydrop.listeners.CrateCloseListener;
@@ -41,6 +44,8 @@ public class SupplyDrop extends JavaPlugin {
     private AutoDropScheduler autoDropScheduler;
     private final ConcurrentHashMap<UUID, Boolean> pendingTemplateCreations = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, WeightEditData> pendingWeightEdits = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, java.util.function.Consumer<Integer>> pendingNumberInputs = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, java.util.function.Consumer<String>> pendingStringInputs = new ConcurrentHashMap<>();
 
     public record WeightEditData(String templateName, Rarity rarity, int filteredIndex, int page) {}
 
@@ -79,6 +84,12 @@ public class SupplyDrop extends JavaPlugin {
             // Initialize database and load saved crates
             DatabaseManager.init(getDataFolder());
 
+            // Initialize history database
+            HistoryManager.init(getDataFolder());
+
+            // Initialize notification manager
+            NotificationManager.init(HistoryManager.getConnection(), ConfigKeys.isNotificationDefaultSubscribe());
+
             // Migrate from old crates.yml if it exists
             DatabaseManager.migrateFromYaml(getDataFolder());
 
@@ -87,14 +98,14 @@ public class SupplyDrop extends JavaPlugin {
             int restored = 0;
             for (DatabaseManager.CrateRecord record : records) {
                 if (record.location().getBlock().getState() instanceof org.bukkit.block.Barrel) {
-                    Crate crate = Crate.createPersisted(record.location(), record.displayName(),
+                    Crate crate = Crate.createPersisted(record.uuid(), record.location(), record.displayName(),
                             record.isTrap(), record.isTeamCrate(), record.requiredPlayers());
                     CrateManager.addCrate(record.location(), crate);
                     restored++;
                 }
             }
             if (restored > 0) {
-                ChatHandler.logMessage("Restored " + restored + " crate(s) from previous session.");
+                AirdropLogger.info("Restored " + restored + " crate(s) from previous session.");
             }
 
             if (ConfigKeys.isAutoDropEnabled()) {
@@ -102,7 +113,7 @@ public class SupplyDrop extends JavaPlugin {
                 autoDropScheduler.start();
             }
 
-            ChatHandler.logMessage("SupplyDrop v" + pluginVersion + " enabled.");
+            AirdropLogger.info("SupplyDrop v" + pluginVersion + " enabled.");
         } catch (Exception e) {
             getLogger().severe("Failed to enable SupplyDrop: " + e.getMessage());
             e.printStackTrace();
@@ -121,6 +132,7 @@ public class SupplyDrop extends JavaPlugin {
 
         CrateManager.clearAll();
         DatabaseManager.shutdown();
+        HistoryManager.shutdown();
         PackageManager.clear();
         RarityRegistry.clear();
 
@@ -188,5 +200,34 @@ public class SupplyDrop extends JavaPlugin {
 
     public WeightEditData consumePendingWeightEdit(UUID playerId) {
         return pendingWeightEdits.remove(playerId);
+    }
+
+    public void setPendingNumberInput(UUID playerId, java.util.function.Consumer<Integer> callback) {
+        pendingNumberInputs.put(playerId, callback);
+    }
+
+    public java.util.function.Consumer<Integer> consumePendingNumberInput(UUID playerId) {
+        return pendingNumberInputs.remove(playerId);
+    }
+
+    public boolean hasPendingNumberInput(UUID playerId) {
+        return pendingNumberInputs.containsKey(playerId);
+    }
+
+    public void setPendingStringInput(UUID playerId, java.util.function.Consumer<String> callback) {
+        pendingStringInputs.put(playerId, callback);
+    }
+
+    public java.util.function.Consumer<String> consumePendingStringInput(UUID playerId) {
+        return pendingStringInputs.remove(playerId);
+    }
+
+    public boolean hasPendingStringInput(UUID playerId) {
+        return pendingStringInputs.containsKey(playerId);
+    }
+
+    public void cancelPendingInputs(UUID playerId) {
+        pendingNumberInputs.remove(playerId);
+        pendingStringInputs.remove(playerId);
     }
 }

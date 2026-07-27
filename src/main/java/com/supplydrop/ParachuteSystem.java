@@ -23,6 +23,7 @@ public class ParachuteSystem {
     private Slime parachuteLeash;
     private FallingBlock fallingCrate;
     private BukkitTask parachuteTask;
+    private double fallVelocity;
     private BukkitTask delayedCleanupTask;
     private SupplyDrop plugin;
     private boolean parachutesReleased;
@@ -58,6 +59,17 @@ public class ParachuteSystem {
         fallingCrate.addPassenger(parachuteLeash);
         fallingCrate.setGravity(false);
 
+        // Calculate fall velocity
+        int fallDuration = options.getFallDuration();
+        if (fallDuration > 0) {
+            int groundY = world.getHighestBlockYAt(dropLocation);
+            double height = dropLocation.getY() - groundY;
+            // velocity = height / (duration_seconds * 10) — task runs every 2 ticks (10 times/sec)
+            this.fallVelocity = height / (fallDuration * 10.0);
+        } else {
+            this.fallVelocity = options.getFallingSpeed();
+        }
+
         startParachuteTask();
     }
 
@@ -75,8 +87,7 @@ public class ParachuteSystem {
                 fallingCrate.getWorld().playEffect(effectLoc, Effect.SMOKE, 0);
             }
 
-            double velocity = -options.getFallingSpeed();
-            fallingCrate.setVelocity(new Vector(0, velocity, 0));
+            fallingCrate.setVelocity(new Vector(0, -fallVelocity, 0));
         }, 0, 2);
     }
 

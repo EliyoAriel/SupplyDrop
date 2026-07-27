@@ -30,6 +30,7 @@ public class LootConfigManager {
 
     private final Map<String, LootTable> lootTables = new HashMap<>();
     private final Map<String, String> displayNames = new HashMap<>();
+    private final Map<String, Integer> fallDurations = new HashMap<>();
     private FileConfiguration config;
 
     public void load(FileConfiguration config) {
@@ -48,6 +49,12 @@ public class LootConfigManager {
             String displayName = templateSection.getString("display-name");
             if (displayName != null && !displayName.isEmpty()) {
                 displayNames.put(templateName, displayName);
+            }
+
+            // Read optional fall-duration
+            int fallDuration = templateSection.getInt("fall-duration", 0);
+            if (fallDuration > 0) {
+                fallDurations.put(templateName, fallDuration);
             }
 
             LootTable table = new LootTable(templateName);
@@ -89,16 +96,12 @@ public class LootConfigManager {
         return Collections.unmodifiableSet(lootTables.keySet());
     }
 
-    public Map<String, LootTable> getAllTables() {
-        return Collections.unmodifiableMap(lootTables);
-    }
-
-    public boolean hasTable(String name) {
-        return lootTables.containsKey(name);
-    }
-
     public String getDisplayName(String templateName) {
         return displayNames.get(templateName);
+    }
+
+    public int getFallDuration(String templateName) {
+        return fallDurations.getOrDefault(templateName, 0);
     }
 
     public void setDisplayName(String templateName, String displayName) {
@@ -106,6 +109,14 @@ public class LootConfigManager {
             displayNames.remove(templateName);
         } else {
             displayNames.put(templateName, displayName);
+        }
+    }
+
+    public void setFallDuration(String templateName, int fallDuration) {
+        if (fallDuration <= 0) {
+            fallDurations.remove(templateName);
+        } else {
+            fallDurations.put(templateName, fallDuration);
         }
     }
 
@@ -145,6 +156,12 @@ public class LootConfigManager {
             String displayName = displayNames.get(entry.getKey());
             if (displayName != null && !displayName.isEmpty()) {
                 templateSection.set("display-name", displayName);
+            }
+
+            // Write fall-duration if set (>0)
+            int fallDur = fallDurations.getOrDefault(entry.getKey(), 0);
+            if (fallDur > 0) {
+                templateSection.set("fall-duration", fallDur);
             }
 
             for (Rarity rarity : RarityRegistry.getAll()) {

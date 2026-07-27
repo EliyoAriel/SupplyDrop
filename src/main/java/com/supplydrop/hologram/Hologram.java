@@ -108,18 +108,6 @@ public class Hologram {
         }
     }
 
-    /**
-     * Update a single line by index.
-     */
-    public void updateLine(int index, String line) {
-        if (index >= 0 && index < armorStands.size()) {
-            ArmorStand stand = armorStands.get(index);
-            if (stand != null && !stand.isDead()) {
-                stand.setCustomName(ChatColor.translateAlternateColorCodes('&', line));
-            }
-        }
-    }
-
     public void destroy() {
         for (ArmorStand stand : armorStands) {
             if (stand != null && !stand.isDead()) {
@@ -127,14 +115,6 @@ public class Hologram {
             }
         }
         armorStands.clear();
-    }
-
-    public List<ArmorStand> getArmorStands() {
-        return List.copyOf(armorStands);
-    }
-
-    public int getLineCount() {
-        return armorStands.size();
     }
 
     public boolean isDead() {

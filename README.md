@@ -14,16 +14,22 @@ A Minecraft Paper plugin that drops randomized care packages from the sky as wor
 - Barrel crate container (auto-destroys when empty)
 - Floating hologram with live countdown, team progress, and customizable placeholders
 - Team crates (chance-based, requires multiple players to open simultaneously)
-- Trap crates (chance-based, spawns mobs + small TNT explosion on open)
+- Trap crates (chance-based, spawns configurable mobs + explosion on open)
 - Auto-drop scheduler with fixed/random intervals and wave drops
-- Full GUI editor (`/supplydrop templates`) with pagination
+- Full GUI loot table editor (`/supplydrop templates`) with pagination
+- Interactive config GUI (`/supplydrop config`) with number input, world selector, template editor, trap mob editor
+- Per-template settings (display-name, fall-duration) via GUI
 - Preview GUI (`/supplydrop preview`) showing all items with rarity/weight info
 - Landing zone marker — particle ring showing where crate will land
 - Anti-grief — block place/break protection + piston protection around crates
 - Async SQLite persistence across server restarts
-- Customizable display names per template
-- Kill credit — team crate broadcasts contributor names on open
-- All features configurable in-game via commands
+- Event history log with pagination and filters (`/supplydrop history`)
+- Notification system with per-player subscriptions
+- Crate UUID system with short IDs for identification
+- Active crate list with clickable coordinate teleport (including falling crates)
+- Delete crates by short UUID, list number, or bulk `all`
+- Toggle commands for hologram, announcements, and notifications
+- Max active supplydrops limit
 
 ## Permissions
 
@@ -41,14 +47,32 @@ A Minecraft Paper plugin that drops randomized care packages from the sky as wor
 | `/supplydrop call` | Call a random supply drop at your location |
 | `/supplydrop <template>` | Call a specific loot table template |
 | `/supplydrop spawn <template> [conditions...]` | Spawn a crate with forced conditions |
-| `/supplydrop active` | List all active (unopened) crates |
+| `/supplydrop active` | List all active crates (landed + falling) with clickable coords |
 | `/supplydrop preview <template>` | Preview all items in a template (paginated) |
-| `/supplydrop db` | Show database status |
 | `/supplydrop templates` | Open the GUI loot table editor |
+| `/supplydrop config` | Open the interactive config GUI |
+| `/supplydrop delete <id\|number\|all>` | Delete active crates by short UUID, list number, or all |
+| `/supplydrop db` | Show database status |
+| `/supplydrop history [page] [event:<type>] [player:<name>]` | View event history with filters |
 | `/supplydrop reload` | Reload configuration files |
 | `/supplydrop version` | Show plugin version |
 | `/supplydrop pause` | Pause the auto-drop scheduler |
 | `/supplydrop resume` | Resume the auto-drop scheduler |
+
+### Toggle Commands
+
+| Command | Description |
+|---|---|
+| `/supplydrop toggle hologram` | Toggle hologram visibility |
+| `/supplydrop toggle announce` | Toggle announcements |
+| `/supplydrop toggle notify` | Toggle personal notifications |
+
+### Notification Commands
+
+| Command | Description |
+|---|---|
+| `/supplydrop subscribe` | Subscribe to drop notifications |
+| `/supplydrop unsubscribe` | Unsubscribe from notifications |
 
 ### Spawn Conditions
 
@@ -106,18 +130,18 @@ The `/supplydrop spawn` command accepts optional conditions:
 | `/supplydrop auto coord-reveal-delay <ticks>` | Coord reveal delay |
 | `/supplydrop auto wave-count <count>` | Crates per drop |
 | `/supplydrop auto expiry <ticks>` | Crate expiry time |
-| `/supplydrop auto team-crate <true\|false>` | Toggle team crates |
+| `/supplydrop auto team-crate <percent>` | Team crate chance |
 | `/supplydrop auto team-players <count>` | Required players |
 | `/supplydrop auto trap-chance <percent>` | Trap chance |
-| `/supplydrop auto trap-mobs <add\|remove> <type>` | Manage trap mobs |
+| `/supplydrop auto trap-mobs <type1> <type2> ...` | Set trap mob types |
 | `/supplydrop auto loot-scaling <true\|false>` | Toggle loot scaling |
-| `/supplydrop auto escalating <true\|false>` | Toggle escalating rarity |
 
 ## Configuration
 
 ### config.yml
 
 ```yaml
+# Drop Settings
 drop:
   parachute:
     chicken-count: 5
@@ -133,6 +157,7 @@ drop:
       radius: 3
       particle: FLAME
   falling-speed: 0.3
+  fall-duration: 0
   height: 20
   hologram:
     enabled: true
@@ -143,17 +168,20 @@ drop:
       - "{time}"
       - "&7Right-click to open"
 
+# Crate settings
 crate:
-  expiry: 0
+  expiry: 1200
   protection-radius: 2
+  max-active: 30
   team-open-chance: 0
-  team-open-players: 2
+  team-open-range: 2
   trap-chance: 0
   trap-mobs:
     - ZOMBIE
     - SKELETON
     - CREEPER
 
+# Loot rarity tiers (weights are relative, higher = more common)
 rarity:
   common:
     weight: 60
@@ -172,23 +200,36 @@ rarity:
     color: GOLD
     prefix: "&6"
 
+# How many items to roll per drop (min-max)
 rolls:
   min: 3
   max: 6
 
+# /supplydrop call settings
+call:
+  fall-duration: 0
+
+# /supplydrop spawn settings
+spawn:
+  fall-duration: 0
+
+# Announcement settings
 announce:
+  enabled: true
   actionbar: false
   coord-reveal-delay: 0
 
+# Auto-drop settings
 auto-drop:
   enabled: false
   paused: false
+  random-interval: true
   interval: 72000
-  random-interval: false
   interval-min: 36000
   interval-max: 72000
   world: "world"
   random-radius: 500
+  fall-duration: 0
   templates:
     weapons:
       weight: 50
@@ -196,14 +237,14 @@ auto-drop:
       weight: 30
     supplies:
       weight: 20
+  wave-count: 1
   announce: true
   announce-actionbar: false
   announce-delay: 100
   coord-reveal-delay: 0
-  wave-count: 1
   expiry: 0
   team-crate-chance: 0
-  team-crate-players: 2
+  team-crate-range: 2
   trap-chance: 0
   trap-mobs:
     - ZOMBIE
@@ -211,8 +252,26 @@ auto-drop:
     - CREEPER
   loot-scaling: false
   loot-scaling-max: 20
-  escalating: false
-  escalating-factor: 1.5
+
+# Logging settings
+logging:
+  debug: false
+
+# UI theme settings
+ui:
+  chat:
+    colors:
+      primary: BLUE
+      text: WHITE
+      accent: AQUA
+      success: GREEN
+      warning: YELLOW
+      error: RED
+      error-detail: DARK_RED
+
+# Notification settings
+notification:
+  default-subscribe: true
 ```
 
 ### Hologram Placeholders
@@ -236,6 +295,7 @@ Define loot tables with weighted items:
 ```yaml
 weapons:
   display-name: "&c&lWeapons Crate"
+  fall-duration: 3
   common:
     items:
       wooden_sword:
@@ -278,28 +338,22 @@ When enabled, bonus rolls scale based on time since last drop:
 - More time = more items
 - Configurable maximum bonus
 
-### Escalating Rarity
-
-When enabled, rarity improves the longer without a drop:
-- Multiplier increases each drop without loot
-- Configurable escalation factor
-
 ## Crate Types
 
 ### Normal Crate
 Standard loot crate with random items. Items drop on ground when barrel is broken normally.
 
 ### Team Crate
-- Chance-based (configurable)
-- Requires N players to right-click simultaneously
-- Hologram shows progress bar `■■■`
+- Chance-based (configurable via `team-open-chance` / `team-crate-chance`)
+- Requires N players to right-click simultaneously (random between 2 and `team-open-range`)
+- Hologram shows progress bar with contributor names
 - All players must be in range when opening
 - Broadcasts contributor names on open
 - **Punishment**: breaking a team crate manually destroys all items (no drop)
 
 ### Trap Crate
-- Chance-based (configurable)
-- Spawns random mobs on open
+- Chance-based (configurable via `trap-chance`)
+- Spawns random mobs from configurable list (each spawn picks independently)
 - Small TNT explosion for visual effect
 - Hologram does not show trap warning (hidden until opened)
 - **Breaking manually**: trap fires + items destroyed
@@ -311,7 +365,67 @@ Standard loot crate with random items. Items drop on ground when barrel is broke
 - **Explosion/burn**: items always drop on ground
 - **Anti-grief**: block place/break protection around crates (configurable radius)
 
+### Crate UUID System
+Every crate gets a unique UUID on creation. Short 8-character IDs are displayed in the active list for easy identification. UUIDs are persisted in the database across server restarts.
+
 ## Features in Detail
+
+### Interactive Config GUI
+
+`/supplydrop config` opens a chest-inventory-based configuration system with multiple pages:
+
+- **Main Menu**: Overview of all settings categories
+- **Auto-Drop Page**: All auto-drop settings with number inputs, toggles, world selector, template editor, trap mob editor
+- **Crate Page**: Crate behavior settings including trap mob management
+- **Toggles Page**: Quick access to all boolean settings
+- **Hologram Page**: Hologram toggle and line editor
+
+Number inputs feature ±1/±10/±100 buttons, a "Set to 0" button, and confirm/cancel/reset controls.
+
+### Per-Template Settings
+
+Each template has its own settings GUI accessible from the template list:
+- **Display Name**: Custom barrel name (editable via chat input)
+- **Fall Duration**: Per-template fall time override
+- **Item Count**: View total items in the loot table
+
+### Template Auto-Drop Editor
+
+`/supplydrop config` → Templates opens a GUI showing all templates:
+- **Emerald** = enabled, **Gray dye** = disabled, **Barrier** = no items
+- **Left-click** to edit weight (opens number input)
+- **Shift-click** to toggle enabled/disabled (weight 0 = disabled)
+
+### Trap Mob Editor
+
+Both crate and auto-drop config pages have clickable trap-mob items that open a GUI showing all mob types with themed materials. Click any mob to toggle it on/off.
+
+### Active Crate Management
+
+`/supplydrop active` lists all active crates (landed + falling):
+- Falling crates show `[Falling]` tag with X/Z coordinates
+- Clickable coordinates teleport you to the crate
+- Short UUID prefix on each entry for identification
+
+`/supplydrop delete <id|number|all>` removes crates:
+- **Short UUID**: first 8 characters of the crate UUID
+- **Number**: the list number from `/supplydrop active`
+- **`all`**: remove all active crates
+
+### Event History
+
+`/supplydrop history [page] [event:<type>] [player:<name>]` shows a paginated event log:
+- Events: DROP, OPEN, BREAK, EXPIRE, TRAP
+- Player filter uses fuzzy search (matches partial names)
+- Stored in separate `history.db` database
+
+### Notification System
+
+Players can subscribe/unsubscribe from drop notifications:
+- `/supplydrop subscribe` / `/supplydrop unsubscribe`
+- Same-world drops notify all online players
+- Cross-world drops only notify subscribed players
+- Configurable default subscription status
 
 ### Landing Zone Marker
 When a crate starts falling, a particle ring appears on the ground showing where it will land. Configurable particle type and radius. A vertical column marks the center.
@@ -328,7 +442,7 @@ Protects the area around supply crates from griefing:
 
 ### Database Persistence
 
-Crate data saves to SQLite database (`plugins/SupplyDrop/crates.db`). On server restart:
+Crate data saves to SQLite database (`plugins/SupplyDrop/crates.db`). Event history and subscriptions saved to `history.db`. On server restart:
 - Unopened crates are restored
 - Barrel blocks are verified
 - Invalid entries are auto-cleaned
@@ -339,6 +453,7 @@ Crate data saves to SQLite database (`plugins/SupplyDrop/crates.db`). On server 
 - Chat or actionbar messages
 - Optional coordinate reveal delay
 - Only announces to players in the same world
+- Toggle with `/supplydrop toggle announce`
 
 ### Wave Drops
 
@@ -351,8 +466,10 @@ Multiple crates can drop simultaneously:
 
 - Fixed or random intervals
 - Pause/resume without disabling
-- Template weight system for random selection
+- Weighted template system for random selection
 - World-specific drops with configurable radius
+- Separate team-crate and trap settings from global crate settings
+- Per-template and per-command fall duration overrides
 
 ## Building
 
@@ -368,7 +485,7 @@ Output: `target/SupplyDrop-1.0.0-SNAPSHOT.jar`
 2. Place in `plugins/` folder
 3. Restart server
 4. Edit `plugins/SupplyDrop/config.yml` as needed
-5. Use `/supplydrop reload` to apply changes
+5. Use `/supplydrop reload` or `/supplydrop config` to apply changes
 
 ## License
 

@@ -16,6 +16,7 @@ import org.bukkit.event.world.WorldUnloadEvent;
 
 import com.supplydrop.Crate;
 import com.supplydrop.helpers.CrateManager;
+import com.supplydrop.helpers.HistoryManager;
 
 public class CrateCleanupListener implements Listener {
 
@@ -35,6 +36,7 @@ public class CrateCleanupListener implements Listener {
             Crate crate = CrateManager.getCrate(e.getBlock().getLocation());
             if (crate != null) {
                 CrateOpenListener.cancelCleanup(e.getBlock().getLocation());
+                HistoryManager.logEvent("DESTROY", crate.getDisplayName(), e.getBlock().getLocation(), null, "burn");
                 // Explosion/burn: always drop items
                 crate.destroyAndDropContents();
                 CrateManager.removeCrate(e.getBlock().getLocation());
@@ -59,6 +61,7 @@ public class CrateCleanupListener implements Listener {
                 Crate crate = CrateManager.getCrate(block.getLocation());
                 if (crate != null) {
                     CrateOpenListener.cancelCleanup(block.getLocation());
+                    HistoryManager.logEvent("DESTROY", crate.getDisplayName(), block.getLocation(), null, "explosion");
                     if (dropItems) {
                         crate.destroyAndDropContents();
                     } else {

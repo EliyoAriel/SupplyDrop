@@ -53,10 +53,10 @@ public final class ConfigKeys {
     // Auto-drop settings
     public static final String AUTO_DROP_ENABLED = "auto-drop.enabled";
     public static final String AUTO_DROP_PAUSED = "auto-drop.paused";
+    public static final String AUTO_DROP_RANDOM_INTERVAL = "auto-drop.random-interval";
     public static final String AUTO_DROP_INTERVAL = "auto-drop.interval";
     public static final String AUTO_DROP_INTERVAL_MIN = "auto-drop.interval-min";
     public static final String AUTO_DROP_INTERVAL_MAX = "auto-drop.interval-max";
-    public static final String AUTO_DROP_RANDOM_INTERVAL = "auto-drop.random-interval";
     public static final String AUTO_DROP_WORLD = "auto-drop.world";
     public static final String AUTO_DROP_RANDOM_RADIUS = "auto-drop.random-radius";
     public static final String AUTO_DROP_TEMPLATE = "auto-drop.template";
@@ -68,19 +68,27 @@ public final class ConfigKeys {
     public static final String AUTO_DROP_WAVE_COUNT = "auto-drop.wave-count";
     public static final String AUTO_DROP_EXPIRY = "auto-drop.expiry";
     public static final String AUTO_DROP_TEAM_CRATE_CHANCE = "auto-drop.team-crate-chance";
-    public static final String AUTO_DROP_TEAM_CRATE_PLAYERS = "auto-drop.team-crate-players";
+    public static final String AUTO_DROP_TEAM_CRATE_RANGE = "auto-drop.team-crate-range";
     public static final String AUTO_DROP_TRAP_CHANCE = "auto-drop.trap-chance";
     public static final String AUTO_DROP_TRAP_MOBS = "auto-drop.trap-mobs";
     public static final String AUTO_DROP_LOOT_SCALING = "auto-drop.loot-scaling";
     public static final String AUTO_DROP_LOOT_SCALING_MAX = "auto-drop.loot-scaling-max";
-    public static final String AUTO_DROP_ESCALATING = "auto-drop.escalating";
-    public static final String AUTO_DROP_ESCALATING_FACTOR = "auto-drop.escalating-factor";
+
+    public static final String NOTIFICATION_DEFAULT_SUBSCRIBE = "notification.default-subscribe";
+    public static final String ANNOUNCE_ENABLED = "announce.enabled";
+
+    public static final String DROP_FALL_DURATION = "drop.fall-duration";
+
+    public static final String AUTO_DROP_FALL_DURATION = "auto-drop.fall-duration";
+    public static final String CALL_FALL_DURATION = "call.fall-duration";
+    public static final String SPAWN_FALL_DURATION = "spawn.fall-duration";
 
     // Crate settings
     public static final String CRATE_EXPIRY = "crate.expiry";
     public static final String CRATE_PROTECTION_RADIUS = "crate.protection-radius";
+    public static final String CRATE_MAX_ACTIVE = "crate.max-active";
     public static final String CRATE_TEAM_OPEN_CHANCE = "crate.team-open-chance";
-    public static final String CRATE_TEAM_OPEN_PLAYERS = "crate.team-open-players";
+    public static final String CRATE_TEAM_OPEN_RANGE = "crate.team-open-range";
     public static final String CRATE_TRAP_CHANCE = "crate.trap-chance";
     public static final String CRATE_TRAP_MOBS = "crate.trap-mobs";
 
@@ -157,6 +165,10 @@ public final class ConfigKeys {
         return getConfig().getBoolean(AUTO_DROP_PAUSED, false);
     }
 
+    public static boolean isAutoDropRandomInterval() {
+        return getConfig().getBoolean(AUTO_DROP_RANDOM_INTERVAL, false);
+    }
+
     public static int getAutoDropInterval() {
         return Math.max(200, getConfig().getInt(AUTO_DROP_INTERVAL, DEFAULT_AUTO_DROP_INTERVAL));
     }
@@ -185,8 +197,9 @@ public final class ConfigKeys {
         ConfigurationSection templatesSection = config.getConfigurationSection(AUTO_DROP_TEMPLATES);
         if (templatesSection != null) {
             for (String name : templatesSection.getKeys(false)) {
-                int weight = Math.max(1, templatesSection.getInt(name + ".weight", 10));
-                list.add(new TemplateWeight(name, weight));
+                int weight = templatesSection.getInt(name + ".weight", 10);
+                if (weight <= 0) continue; // disabled
+                list.add(new TemplateWeight(name, Math.max(1, weight)));
             }
         }
 
@@ -219,10 +232,6 @@ public final class ConfigKeys {
         return Math.max(0, getConfig().getInt(AUTO_DROP_COORD_REVEAL_DELAY, 0));
     }
 
-    public static boolean isAutoDropRandomInterval() {
-        return getConfig().getBoolean(AUTO_DROP_RANDOM_INTERVAL, false);
-    }
-
     public static int getAutoDropIntervalMin() {
         return Math.max(200, getConfig().getInt(AUTO_DROP_INTERVAL_MIN, 36000));
     }
@@ -237,18 +246,6 @@ public final class ConfigKeys {
 
     public static int getAutoDropExpiry() {
         return Math.max(0, getConfig().getInt(AUTO_DROP_EXPIRY, 0));
-    }
-
-    public static boolean isAutoDropTeamCrate() {
-        return getConfig().getInt(AUTO_DROP_TEAM_CRATE_CHANCE, 0) > 0;
-    }
-
-    public static int getAutoDropTeamCrateChance() {
-        return Math.max(0, Math.min(100, getConfig().getInt(AUTO_DROP_TEAM_CRATE_CHANCE, 0)));
-    }
-
-    public static int getAutoDropTeamCratePlayers() {
-        return Math.max(2, getConfig().getInt(AUTO_DROP_TEAM_CRATE_PLAYERS, 2));
     }
 
     public static int getAutoDropTrapChance() {
@@ -274,21 +271,17 @@ public final class ConfigKeys {
         return Math.max(1, getConfig().getInt(AUTO_DROP_LOOT_SCALING_MAX, 20));
     }
 
-    public static boolean isAutoDropEscalating() {
-        return getConfig().getBoolean(AUTO_DROP_ESCALATING, false);
-    }
-
-    public static double getAutoDropEscalatingFactor() {
-        return Math.max(1.0, getConfig().getDouble(AUTO_DROP_ESCALATING_FACTOR, 1.5));
-    }
-
     // Crate settings
     public static int getCrateExpiry() {
-        return Math.max(0, getConfig().getInt(CRATE_EXPIRY, 0));
+        return Math.max(0, getConfig().getInt(CRATE_EXPIRY, 1200));
     }
 
     public static int getCrateProtectionRadius() {
         return Math.max(0, getConfig().getInt(CRATE_PROTECTION_RADIUS, 2));
+    }
+
+    public static int getCrateMaxActive() {
+        return Math.max(0, getConfig().getInt(CRATE_MAX_ACTIVE, 0));
     }
 
     public static int getCrateTeamOpenChance() {
@@ -296,7 +289,7 @@ public final class ConfigKeys {
     }
 
     public static int getCrateTeamOpenPlayers() {
-        return Math.max(2, getConfig().getInt(CRATE_TEAM_OPEN_PLAYERS, 2));
+        return Math.max(2, getConfig().getInt(CRATE_TEAM_OPEN_RANGE, 2));
     }
 
     public static int getCrateTrapChance() {
@@ -312,15 +305,6 @@ public final class ConfigKeys {
             mobs.add("CREEPER");
         }
         return mobs;
-    }
-
-    // Announcement settings
-    public static boolean isAnnounceActionbar() {
-        return getConfig().getBoolean(ANNOUNCE_ACTIONBAR, false);
-    }
-
-    public static int getAnnounceCoordRevealDelay() {
-        return Math.max(0, getConfig().getInt(ANNOUNCE_COORD_REVEAL_DELAY, 0));
     }
 
     // Hologram settings
@@ -345,6 +329,10 @@ public final class ConfigKeys {
         return getConfig().getBoolean(LOGGING_DEBUG, false);
     }
 
+    public static boolean isAnnouncementEnabled() {
+        return getConfig().getBoolean(ANNOUNCE_ENABLED, true);
+    }
+
     // Sanitizers
     static int sanitizeParachuteChickenCount(int count) {
         if (count < MIN_PARACHUTE_CHICKEN_COUNT || count > MAX_PARACHUTE_CHICKEN_COUNT) return DEFAULT_PARACHUTE_CHICKEN_COUNT;
@@ -355,6 +343,33 @@ public final class ConfigKeys {
         if (!Double.isFinite(speed)) return DEFAULT_DROP_FALLING_SPEED;
         if (speed < MIN_DROP_FALLING_SPEED || speed > MAX_DROP_FALLING_SPEED) return DEFAULT_DROP_FALLING_SPEED;
         return speed;
+    }
+
+    public static boolean isNotificationDefaultSubscribe() {
+        return getConfig().getBoolean(NOTIFICATION_DEFAULT_SUBSCRIBE, true);
+    }
+
+    /**
+     * Fall duration in seconds. When > 0, overrides falling-speed.
+     * ParachuteSystem calculates velocity based on actual height and this duration.
+     */
+    public static int getDropFallDuration() {
+        return Math.max(0, getConfig().getInt(DROP_FALL_DURATION, 0));
+    }
+
+    public static int getAutoDropFallDuration() {
+        int val = getConfig().getInt(AUTO_DROP_FALL_DURATION, 0);
+        return val > 0 ? val : getDropFallDuration();
+    }
+
+    public static int getCallFallDuration() {
+        int val = getConfig().getInt(CALL_FALL_DURATION, 0);
+        return val > 0 ? val : getDropFallDuration();
+    }
+
+    public static int getSpawnFallDuration() {
+        int val = getConfig().getInt(SPAWN_FALL_DURATION, 0);
+        return val > 0 ? val : getDropFallDuration();
     }
 
     static int sanitizeDropHeight(int height) {

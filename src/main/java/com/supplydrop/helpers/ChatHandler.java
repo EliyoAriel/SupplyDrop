@@ -112,14 +112,4 @@ public class ChatHandler {
             Bukkit.getServer().getConsoleSender().sendMessage(formatted);
         }
     }
-
-    public static void logMessage(String message) {
-        getLogger().info(message);
-    }
-
-    public static void debug(String message) {
-        if (ConfigKeys.isDebugLoggingEnabled()) {
-            getLogger().info("[DEBUG] " + message);
-        }
-    }
 }

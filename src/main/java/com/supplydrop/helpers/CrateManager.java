@@ -144,22 +144,17 @@ public class CrateManager {
 
     public static List<Crate> getActiveCrates() {
         List<Crate> active = new ArrayList<>();
+        for (Crate crate : crateMap.values()) {
+            if (crate != null && !crate.getOpened()) {
+                active.add(crate);
+            }
+        }
         for (Crate crate : landedCrateMap.values()) {
             if (crate != null && !crate.getOpened()) {
                 active.add(crate);
             }
         }
         return active;
-    }
-
-    public static int getActiveCrateCount() {
-        int count = 0;
-        for (Crate crate : landedCrateMap.values()) {
-            if (crate != null && !crate.getOpened()) {
-                count++;
-            }
-        }
-        return count;
     }
 
     public static int getFallingCrateCount() {

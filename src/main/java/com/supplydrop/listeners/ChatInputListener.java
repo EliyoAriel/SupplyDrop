@@ -28,6 +28,20 @@ public class ChatInputListener implements Listener {
         SupplyDrop plugin = SupplyDrop.getPluginInstance();
         if (plugin == null || !plugin.isEnabled()) return;
 
+        // Check config number input
+        if (plugin.hasPendingNumberInput(player.getUniqueId())) {
+            e.setCancelled(true);
+            handleConfigNumberInput(player, plugin, e.getMessage().trim());
+            return;
+        }
+
+        // Check config string input
+        if (plugin.hasPendingStringInput(player.getUniqueId())) {
+            e.setCancelled(true);
+            handleConfigStringInput(player, plugin, e.getMessage().trim());
+            return;
+        }
+
         // Check weight edit first (more specific)
         SupplyDrop.WeightEditData weightData = plugin.consumePendingWeightEdit(player.getUniqueId());
         if (weightData != null) {
@@ -126,5 +140,38 @@ public class ChatInputListener implements Listener {
             Bukkit.getPluginManager().registerEvents(gui, SupplyDrop.getPluginInstance());
             gui.openInventory(player);
         });
+    }
+
+    private void handleConfigNumberInput(Player player, SupplyDrop plugin, String input) {
+        java.util.function.Consumer<Integer> callback = plugin.consumePendingNumberInput(player.getUniqueId());
+        if (callback == null) return;
+
+        if (input.equalsIgnoreCase("cancel")) {
+            ChatHandler.send(player, "Input &ccancelled&7.");
+            return;
+        }
+
+        int value;
+        try {
+            value = Integer.parseInt(input);
+        } catch (NumberFormatException ex) {
+            ChatHandler.sendError(player, "Not a valid number. Type a number or &c/cancel&7.");
+            plugin.setPendingNumberInput(player.getUniqueId(), callback);
+            return;
+        }
+
+        callback.accept(value);
+    }
+
+    private void handleConfigStringInput(Player player, SupplyDrop plugin, String input) {
+        java.util.function.Consumer<String> callback = plugin.consumePendingStringInput(player.getUniqueId());
+        if (callback == null) return;
+
+        if (input.equalsIgnoreCase("cancel")) {
+            ChatHandler.send(player, "Input &ccancelled&7.");
+            return;
+        }
+
+        callback.accept(input);
     }
 }
