@@ -84,7 +84,18 @@ public class DatabaseManager {
      */
     public static void save(Location location, String displayName, boolean isTrap,
                             boolean isTeamCrate, int requiredPlayers, String uuid) {
-        writeQueue.offer(() -> doSave(location, displayName, isTrap, isTeamCrate, requiredPlayers, uuid));
+        writeQueue.offer(() -> doSave(location, displayName, isTrap, isTeamCrate, requiredPlayers, uuid, "READY_TO_OPEN", 0, 0, 0, 0));
+    }
+
+    /**
+     * Save a crate with full state (async).
+     */
+    public static void saveWithState(Location location, String displayName, boolean isTrap,
+                                     boolean isTeamCrate, int requiredPlayers, String uuid,
+                                     String state, int lockDuration, long lockStartTime,
+                                     int expiryTicks, long landTime) {
+        writeQueue.offer(() -> doSave(location, displayName, isTrap, isTeamCrate, requiredPlayers, uuid,
+                state, lockDuration, lockStartTime, expiryTicks, landTime));
     }
 
     /**
@@ -133,12 +144,19 @@ public class DatabaseManager {
                 boolean isTrap = rs.getInt("is_trap") == 1;
                 boolean isTeamCrate = rs.getInt("is_team_crate") == 1;
                 int requiredPlayers = rs.getInt("required_players");
+                String state = rs.getString("crate_state");
+                if (state == null || state.isEmpty()) state = "READY_TO_OPEN";
+                int lockDuration = rs.getInt("lock_duration");
+                long lockStartTime = rs.getLong("lock_start_time");
+                int expiryTicks = rs.getInt("expiry_ticks");
+                long landTime = rs.getLong("land_time");
 
                 World world = Bukkit.getWorld(worldName);
                 if (world == null) continue;
 
                 Location loc = new Location(world, x, y, z);
-                records.add(new CrateRecord(uuid, loc, displayName, isTrap, isTeamCrate, requiredPlayers));
+                records.add(new CrateRecord(uuid, loc, displayName, isTrap, isTeamCrate, requiredPlayers,
+                        state, lockDuration, lockStartTime, expiryTicks, landTime));
             }
         } catch (SQLException e) {
             AirdropLogger.warning("Failed to load crates from database: " + e.getMessage());
@@ -199,7 +217,8 @@ public class DatabaseManager {
             if (world == null) continue;
 
             Location loc = new Location(world, x, y, z);
-            doSave(loc, displayName, isTrap, isTeamCrate, teamPlayers, java.util.UUID.randomUUID().toString());
+            doSave(loc, displayName, isTrap, isTeamCrate, teamPlayers, java.util.UUID.randomUUID().toString(),
+                    "READY_TO_OPEN", 0, 0, 0, 0);
             migrated++;
         }
 
@@ -221,6 +240,11 @@ public class DatabaseManager {
                 + "is_trap INTEGER DEFAULT 0, "
                 + "is_team_crate INTEGER DEFAULT 0, "
                 + "required_players INTEGER DEFAULT 2, "
+                + "crate_state TEXT DEFAULT 'READY_TO_OPEN', "
+                + "lock_duration INTEGER DEFAULT 0, "
+                + "lock_start_time INTEGER DEFAULT 0, "
+                + "expiry_ticks INTEGER DEFAULT 0, "
+                + "land_time INTEGER DEFAULT 0, "
                 + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
                 + "UNIQUE(world, x, y, z)"
                 + ")";
@@ -228,29 +252,49 @@ public class DatabaseManager {
             stmt.execute(sql);
         }
 
-        // Migration: add uuid column if missing from existing DB
+        // Migration: add columns if missing from existing DB
         try (Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery("PRAGMA table_info(" + TABLE + ")")) {
-            boolean hasUuid = false;
+            java.util.Set<String> existingColumns = new java.util.HashSet<>();
             while (rs.next()) {
-                if ("uuid".equals(rs.getString("name"))) {
-                    hasUuid = true;
-                    break;
-                }
+                existingColumns.add(rs.getString("name"));
             }
-            if (!hasUuid) {
+            if (!existingColumns.contains("uuid")) {
                 stmt.execute("ALTER TABLE " + TABLE + " ADD COLUMN uuid TEXT NOT NULL DEFAULT ''");
                 AirdropLogger.info("Added uuid column to " + TABLE + " table.");
+            }
+            if (!existingColumns.contains("crate_state")) {
+                stmt.execute("ALTER TABLE " + TABLE + " ADD COLUMN crate_state TEXT DEFAULT 'READY_TO_OPEN'");
+                AirdropLogger.info("Added crate_state column to " + TABLE + " table.");
+            }
+            if (!existingColumns.contains("lock_duration")) {
+                stmt.execute("ALTER TABLE " + TABLE + " ADD COLUMN lock_duration INTEGER DEFAULT 0");
+                AirdropLogger.info("Added lock_duration column to " + TABLE + " table.");
+            }
+            if (!existingColumns.contains("lock_start_time")) {
+                stmt.execute("ALTER TABLE " + TABLE + " ADD COLUMN lock_start_time INTEGER DEFAULT 0");
+                AirdropLogger.info("Added lock_start_time column to " + TABLE + " table.");
+            }
+            if (!existingColumns.contains("expiry_ticks")) {
+                stmt.execute("ALTER TABLE " + TABLE + " ADD COLUMN expiry_ticks INTEGER DEFAULT 0");
+                AirdropLogger.info("Added expiry_ticks column to " + TABLE + " table.");
+            }
+            if (!existingColumns.contains("land_time")) {
+                stmt.execute("ALTER TABLE " + TABLE + " ADD COLUMN land_time INTEGER DEFAULT 0");
+                AirdropLogger.info("Added land_time column to " + TABLE + " table.");
             }
         }
     }
 
     private static void doSave(Location location, String displayName, boolean isTrap,
-                               boolean isTeamCrate, int requiredPlayers, String uuid) {
+                               boolean isTeamCrate, int requiredPlayers, String uuid,
+                               String state, int lockDuration, long lockStartTime,
+                               int expiryTicks, long landTime) {
         if (connection == null) return;
         String sql = "INSERT OR REPLACE INTO " + TABLE
-                + " (uuid, world, x, y, z, display_name, is_trap, is_team_crate, required_players) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                + " (uuid, world, x, y, z, display_name, is_trap, is_team_crate, required_players, "
+                + "crate_state, lock_duration, lock_start_time, expiry_ticks, land_time) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, uuid);
             ps.setString(2, location.getWorld().getName());
@@ -261,6 +305,11 @@ public class DatabaseManager {
             ps.setInt(7, isTrap ? 1 : 0);
             ps.setInt(8, isTeamCrate ? 1 : 0);
             ps.setInt(9, requiredPlayers);
+            ps.setString(10, state);
+            ps.setInt(11, lockDuration);
+            ps.setLong(12, lockStartTime);
+            ps.setInt(13, expiryTicks);
+            ps.setLong(14, landTime);
             ps.executeUpdate();
         } catch (SQLException e) {
             AirdropLogger.warning("Failed to save crate to database: " + e.getMessage());
@@ -337,5 +386,6 @@ public class DatabaseManager {
      * Record holding persisted crate data.
      */
     public record CrateRecord(java.util.UUID uuid, Location location, String displayName, boolean isTrap,
-                              boolean isTeamCrate, int requiredPlayers) {}
+                              boolean isTeamCrate, int requiredPlayers, String state,
+                              int lockDuration, long lockStartTime, int expiryTicks, long landTime) {}
 }

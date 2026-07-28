@@ -23,6 +23,14 @@ public class CrateDestroyListener implements Listener {
         // Cancel pending cleanup from CrateOpenListener
         CrateOpenListener.cancelCleanup(barrelLocation);
 
+        // LOCK state: use configurable break behavior
+        if (crate.isLocked()) {
+            HistoryManager.logEvent("DESTROY", crate.getDisplayName(), barrelLocation, null, "lock_break");
+            crate.destroyDuringLock();
+            CrateManager.removeCrate(barrelLocation);
+            return;
+        }
+
         if (crate.getOpened()) {
             // Already opened — just destroy (cleanup handles items)
             CrateManager.removeCrateAndDestroy(barrelLocation);

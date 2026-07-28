@@ -91,6 +91,25 @@ public final class ConfigKeys {
     public static final String CRATE_TEAM_OPEN_RANGE = "crate.team-open-range";
     public static final String CRATE_TRAP_CHANCE = "crate.trap-chance";
     public static final String CRATE_TRAP_MOBS = "crate.trap-mobs";
+    public static final String CRATE_LOCK_ENABLED = "crate.lock.enabled";
+    public static final String CRATE_LOCK_DURATION = "crate.lock.duration";
+    public static final String CRATE_LOCK_RANDOM = "crate.lock.random";
+    public static final String CRATE_LOCK_DURATION_MIN = "crate.lock.duration-min";
+    public static final String CRATE_LOCK_DURATION_MAX = "crate.lock.duration-max";
+    public static final String CRATE_LOCK_SOUND_LOCK = "crate.lock.sound-lock";
+    public static final String CRATE_LOCK_SOUND_READY = "crate.lock.sound-ready";
+    public static final String CRATE_LOCK_READY_NOTIFICATION = "crate.lock.ready-notification";
+    public static final String CRATE_LOCK_READY_NOTIFICATION_RADIUS = "crate.lock.ready-notification-radius";
+    public static final String CRATE_LOCK_BREAK_BEHAVIOR = "crate.lock.break-behavior";
+    public static final String CRATE_LOCK_PARTICLE_ENABLED = "crate.lock.particle.enabled";
+    public static final String CRATE_LOCK_PARTICLE_TYPE = "crate.lock.particle.type";
+    public static final String CRATE_LOCK_PARTICLE_RADIUS = "crate.lock.particle.radius";
+
+    // Zone settings
+    public static final String ZONE_ENABLED = "crate.zone.enabled";
+    public static final String ZONE_RADIUS = "crate.zone.radius";
+    public static final String ZONE_PARTICLE = "crate.zone.particle";
+    public static final String ZONE_DENY_MESSAGE = "crate.zone.deny-message";
 
     // Hologram settings
     public static final String HOLOGRAM_ENABLED = "drop.hologram.enabled";
@@ -241,7 +260,9 @@ public final class ConfigKeys {
     }
 
     public static int getAutoDropWaveCount() {
-        return Math.max(1, getConfig().getInt(AUTO_DROP_WAVE_COUNT, 1));
+        int max = Math.max(1, getConfig().getInt(AUTO_DROP_WAVE_COUNT, 1));
+        if (max <= 1) return 1;
+        return 2 + new java.util.Random().nextInt(Math.max(1, max - 1));
     }
 
     public static int getAutoDropExpiry() {
@@ -255,12 +276,17 @@ public final class ConfigKeys {
     public static List<String> getAutoDropTrapMobs() {
         List<String> mobs = getConfig().getStringList(AUTO_DROP_TRAP_MOBS);
         if (mobs.isEmpty()) {
-            mobs = new ArrayList<>();
-            mobs.add("ZOMBIE");
-            mobs.add("SKELETON");
-            mobs.add("CREEPER");
+            return getCrateTrapMobs();
         }
         return mobs;
+    }
+
+    public static int getAutoDropTeamCrateChance() {
+        return Math.max(0, Math.min(100, getConfig().getInt(AUTO_DROP_TEAM_CRATE_CHANCE, 0)));
+    }
+
+    public static int getAutoDropTeamCrateRange() {
+        return Math.max(2, getConfig().getInt(AUTO_DROP_TEAM_CRATE_RANGE, 2));
     }
 
     public static boolean isAutoDropLootScaling() {
@@ -305,6 +331,75 @@ public final class ConfigKeys {
             mobs.add("CREEPER");
         }
         return mobs;
+    }
+
+    public static boolean isCrateLockEnabled() {
+        return getConfig().getBoolean(CRATE_LOCK_ENABLED, true);
+    }
+
+    public static int getCrateLockDuration() {
+        return Math.max(0, getConfig().getInt(CRATE_LOCK_DURATION, 200));
+    }
+
+    public static boolean isCrateLockRandom() {
+        return getConfig().getBoolean(CRATE_LOCK_RANDOM, false);
+    }
+
+    public static int getCrateLockDurationMin() {
+        return Math.max(0, getConfig().getInt(CRATE_LOCK_DURATION_MIN, 100));
+    }
+
+    public static int getCrateLockDurationMax() {
+        return Math.max(0, getConfig().getInt(CRATE_LOCK_DURATION_MAX, 400));
+    }
+
+    public static String getCrateLockSoundLock() {
+        return getConfig().getString(CRATE_LOCK_SOUND_LOCK, "entity.iron_door.close");
+    }
+
+    public static String getCrateLockSoundReady() {
+        return getConfig().getString(CRATE_LOCK_SOUND_READY, "entity.player.levelup");
+    }
+
+    public static boolean isCrateLockReadyNotification() {
+        return getConfig().getBoolean(CRATE_LOCK_READY_NOTIFICATION, true);
+    }
+
+    public static int getCrateLockReadyNotificationRadius() {
+        return Math.max(1, getConfig().getInt(CRATE_LOCK_READY_NOTIFICATION_RADIUS, 20));
+    }
+
+    public static String getCrateLockBreakBehavior() {
+        return getConfig().getString(CRATE_LOCK_BREAK_BEHAVIOR, "destroy");
+    }
+
+    public static boolean isCrateLockParticleEnabled() {
+        return getConfig().getBoolean(CRATE_LOCK_PARTICLE_ENABLED, true);
+    }
+
+    public static String getCrateLockParticleType() {
+        return getConfig().getString(CRATE_LOCK_PARTICLE_TYPE, "ENCHANTMENT_TABLE");
+    }
+
+    public static double getCrateLockParticleRadius() {
+        return Math.max(0.5, getConfig().getDouble(CRATE_LOCK_PARTICLE_RADIUS, 1.5));
+    }
+
+    // Zone settings
+    public static boolean isZoneEnabled() {
+        return getConfig().getBoolean(ZONE_ENABLED, true);
+    }
+
+    public static double getZoneRadius() {
+        return Math.max(5, getConfig().getDouble(ZONE_RADIUS, 25));
+    }
+
+    public static String getZoneParticle() {
+        return getConfig().getString(ZONE_PARTICLE, "FLAME");
+    }
+
+    public static String getZoneDenyMessage() {
+        return getConfig().getString(ZONE_DENY_MESSAGE, "&c&lSupply Drop &7- &fYou cannot enter the drop zone!");
     }
 
     // Hologram settings

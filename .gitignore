@@ -35,3 +35,6 @@ logs/
 plugins/SupplyDrop/crates.yml
 plugins/SupplyDrop/config.yml
 plugins/SupplyDrop/packages.yml
+
+# Documentation
+/docs

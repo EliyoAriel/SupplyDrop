@@ -1,5 +1,12 @@
 package com.supplydrop.config;
 
+import java.util.List;
+
+/**
+ * Resolved drop options — single source of truth for all crate settings.
+ * Build chain: template > context override (auto-drop/call/spawn) > crate.* global
+ * Null field = use global default from crate.*
+ */
 public class DropOptions {
 
     private Integer chickenCount;
@@ -12,6 +19,10 @@ public class DropOptions {
     private Integer smokeHeight;
     private Integer expiryTicks;
     private Integer fallDuration;
+    private Integer trapChance;
+    private List<String> trapMobs;
+    private Integer teamCrateChance;
+    private Integer teamCrateRange;
 
     public static DropOptions createDefault() {
         return new DropOptions();
@@ -67,6 +78,28 @@ public class DropOptions {
         return this;
     }
 
+    public DropOptions withTrapChance(Integer chance) {
+        this.trapChance = chance;
+        return this;
+    }
+
+    public DropOptions withTrapMobs(List<String> mobs) {
+        this.trapMobs = mobs;
+        return this;
+    }
+
+    public DropOptions withTeamCrateChance(Integer chance) {
+        this.teamCrateChance = chance;
+        return this;
+    }
+
+    public DropOptions withTeamCrateRange(Integer range) {
+        this.teamCrateRange = range;
+        return this;
+    }
+
+    // ─── GETTERS (null = fall back to crate.* global) ────────────────
+
     public int getChickenCount() {
         return chickenCount != null ? ConfigKeys.sanitizeParachuteChickenCount(chickenCount) : ConfigKeys.getParachuteChickenCount();
     }
@@ -105,5 +138,33 @@ public class DropOptions {
 
     public int getFallDuration() {
         return fallDuration != null ? Math.max(0, fallDuration) : 0;
+    }
+
+    /**
+     * Trap chance override. Returns null if not set (caller should use crate.* global).
+     */
+    public Integer getTrapChance() {
+        return trapChance;
+    }
+
+    /**
+     * Trap mobs override. Returns null if not set (caller should use crate.* global).
+     */
+    public List<String> getTrapMobs() {
+        return trapMobs;
+    }
+
+    /**
+     * Team crate chance override. Returns null if not set (caller should use crate.* global).
+     */
+    public Integer getTeamCrateChance() {
+        return teamCrateChance;
+    }
+
+    /**
+     * Team crate range override. Returns null if not set (caller should use crate.* global).
+     */
+    public Integer getTeamCrateRange() {
+        return teamCrateRange;
     }
 }

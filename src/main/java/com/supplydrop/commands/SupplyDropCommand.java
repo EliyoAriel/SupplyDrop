@@ -115,12 +115,14 @@ public class SupplyDropCommand implements CommandExecutor {
                 int y = landed.getBlockY();
                 int z = landed.getBlockZ();
                 String cmd = "/tp " + player.getName() + " " + x + " " + y + " " + z;
+                String stateLabel = getStateLabel(crate);
                 String hoverText = "Click to teleport to " + name;
 
                 net.kyori.adventure.text.Component msg = net.kyori.adventure.text.Component.empty()
                     .append(net.kyori.adventure.text.Component.text(" "))
                     .append(net.kyori.adventure.text.Component.text("[" + shortId + "]", net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY))
                     .append(net.kyori.adventure.text.Component.text(" " + name, net.kyori.adventure.text.format.NamedTextColor.GOLD))
+                    .append(net.kyori.adventure.text.Component.text(" " + stateLabel, net.kyori.adventure.text.format.NamedTextColor.YELLOW))
                     .append(net.kyori.adventure.text.Component.text(" - ", net.kyori.adventure.text.format.NamedTextColor.GRAY))
                     .append(net.kyori.adventure.text.Component.text(worldName + " " + x + " " + y + " " + z, net.kyori.adventure.text.format.NamedTextColor.WHITE)
                         .hoverEvent(net.kyori.adventure.text.event.HoverEvent.showText(
@@ -135,14 +137,14 @@ public class SupplyDropCommand implements CommandExecutor {
                     int z = fallback.getBlockZ();
                     int y = fallback.getWorld().getHighestBlockYAt(x, z) + 1;
                     String cmd = "/tp " + player.getName() + " " + x + " " + y + " " + z;
-                    String status = landed != null ? "" : " §e[Falling]";
+                    String stateLabel = getStateLabel(crate);
                     String hoverText = "Click to teleport to " + name;
 
                     net.kyori.adventure.text.Component msg = net.kyori.adventure.text.Component.empty()
                         .append(net.kyori.adventure.text.Component.text(" "))
                         .append(net.kyori.adventure.text.Component.text("[" + shortId + "]", net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY))
                         .append(net.kyori.adventure.text.Component.text(" " + name, net.kyori.adventure.text.format.NamedTextColor.GOLD))
-                        .append(net.kyori.adventure.text.Component.text(status, net.kyori.adventure.text.format.NamedTextColor.YELLOW))
+                        .append(net.kyori.adventure.text.Component.text(" " + stateLabel, net.kyori.adventure.text.format.NamedTextColor.YELLOW))
                         .append(net.kyori.adventure.text.Component.text(" - ", net.kyori.adventure.text.format.NamedTextColor.GRAY))
                         .append(net.kyori.adventure.text.Component.text(worldName + " " + x + " " + z, net.kyori.adventure.text.format.NamedTextColor.WHITE)
                             .hoverEvent(net.kyori.adventure.text.event.HoverEvent.showText(
@@ -157,6 +159,20 @@ public class SupplyDropCommand implements CommandExecutor {
                 }
             }
         }
+    }
+
+    private String getStateLabel(Crate crate) {
+        return switch (crate.getState()) {
+            case SPAWN -> "§e[Spawning]";
+            case FALL -> "§e[Falling]";
+            case LAND -> "§e[Landing]";
+            case LOCK -> {
+                long remainingMs = crate.getLockRemainingMs();
+                long sec = remainingMs / 1000;
+                yield "§c[LOCK " + sec + "s]";
+            }
+            case READY_TO_OPEN -> "§a[READY]";
+        };
     }
 
     /**
@@ -234,7 +250,7 @@ public class SupplyDropCommand implements CommandExecutor {
         }
 
         if (args.length < 2) {
-            ChatHandler.sendError(sender, "Usage: /supplydrop spawn <template> [team] [trap] [wave:<count>] [players:<count>] [expiry:<ticks>]");
+            ChatHandler.sendError(sender, "Usage: /supplydrop spawn <template> [team] [trap] [wave:<count>] [players:<count>] [expiry:<ticks>] [lock:<ticks>]");
             return;
         }
 
@@ -250,6 +266,7 @@ public class SupplyDropCommand implements CommandExecutor {
         int waveCount = 1;
         int teamPlayers = 2;
         int expiryTicks = ConfigKeys.getCrateExpiry();
+        int lockOverride = -1;
 
         // Parse optional conditions
         for (int i = 2; i < args.length; i++) {
@@ -279,22 +296,31 @@ public class SupplyDropCommand implements CommandExecutor {
                     ChatHandler.sendError(sender, "Invalid expiry ticks: &c" + arg.substring(7));
                     return;
                 }
+            } else if (arg.startsWith("lock:")) {
+                try {
+                    lockOverride = Math.max(0, Integer.parseInt(arg.substring(5)));
+                } catch (NumberFormatException e) {
+                    ChatHandler.sendError(sender, "Invalid lock ticks: &c" + arg.substring(5));
+                    return;
+                }
             }
         }
 
         try {
             if (waveCount > 1) {
-                DropController.spawnWaveForced(pkg, player, waveCount, forceTeam, forceTrap, teamPlayers, expiryTicks);
+                DropController.spawnWaveForced(pkg, player, waveCount, forceTeam, forceTrap, teamPlayers, expiryTicks, lockOverride);
                 ChatHandler.send(player, "Spawned &b" + waveCount + " &e" + templateName + " &bcrate(s)!" +
                         (forceTeam ? " &7[Team: " + teamPlayers + " players]" : "") +
                         (forceTrap ? " &7[Trap]" : "") +
-                        (expiryTicks > 0 ? " &7[Expiry: " + expiryTicks + "t]" : " &7[No Expiry]"));
+                        (expiryTicks > 0 ? " &7[Expiry: " + expiryTicks + "t]" : " &7[No Expiry]") +
+                        (lockOverride >= 0 ? " &7[Lock: " + lockOverride + "t]" : ""));
             } else {
-                DropController.spawnForced(pkg, player, forceTeam, forceTrap, teamPlayers, expiryTicks);
-                ChatHandler.send(player, "Spawned &b" + templateName + " &bcrate!" +
+                DropController.spawnForced(pkg, player, forceTeam, forceTrap, teamPlayers, expiryTicks, lockOverride);
+                ChatHandler.send(player, "Spawned &e" + templateName + " &bsupply drop!" +
                         (forceTeam ? " &7[Team: " + teamPlayers + " players]" : "") +
                         (forceTrap ? " &7[Trap]" : "") +
-                        (expiryTicks > 0 ? " &7[Expiry: " + expiryTicks + "t]" : " &7[No Expiry]"));
+                        (expiryTicks > 0 ? " &7[Expiry: " + expiryTicks + "t]" : " &7[No Expiry]") +
+                        (lockOverride >= 0 ? " &7[Lock: " + lockOverride + "t]" : ""));
             }
         } catch (SkyNotClearException e) {
             ChatHandler.sendError(player, "Sky must be clear above your location.");
@@ -614,7 +640,7 @@ public class SupplyDropCommand implements CommandExecutor {
         }
 
         if (args.length < 2) {
-            ChatHandler.sendError(sender, "Usage: /supplydrop toggle <hologram|announce|notify>");
+            ChatHandler.sendError(sender, "Usage: /supplydrop toggle <hologram|announce|notify|zone>");
             return;
         }
 
@@ -643,7 +669,18 @@ public class SupplyDropCommand implements CommandExecutor {
                 config.saveConfig();
                 ChatHandler.send(sender, "Notification default &b" + (!current ? "&aenabled" : "&cdisabled") + "&7.");
             }
-            default -> ChatHandler.sendError(sender, "Unknown toggle: &c" + args[1] + "&7. Use hologram, announce, or notify.");
+            case "zone" -> {
+                boolean current = ConfigKeys.isZoneEnabled();
+                config.getConfig().set(ConfigKeys.ZONE_ENABLED, !current);
+                config.saveConfig();
+                if (!current) {
+                    com.supplydrop.helpers.ZoneManager.start(SupplyDrop.getPluginInstance());
+                } else {
+                    com.supplydrop.helpers.ZoneManager.stop();
+                }
+                ChatHandler.send(sender, "Zone protection &b" + (!current ? "&aenabled" : "&cdisabled") + "&7.");
+            }
+            default -> ChatHandler.sendError(sender, "Unknown toggle: &c" + args[1] + "&7. Use hologram, announce, notify, or zone.");
         }
     }
 

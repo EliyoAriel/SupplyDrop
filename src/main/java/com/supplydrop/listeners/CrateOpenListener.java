@@ -40,6 +40,17 @@ public class CrateOpenListener implements Listener {
         if (crate == null) return;
         if (crate.getOpened()) return;
 
+        // LOCK state: completely block opening
+        if (crate.isLocked()) {
+            e.setCancelled(true);
+            long remainingMs = crate.getLockRemainingMs();
+            long remainingSec = remainingMs / 1000;
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1f, 0.5f);
+            player.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    "&c&lCrate Locked &7- Opens in &e" + remainingSec + "s&7."));
+            return;
+        }
+
         // Team crate check
         if (!crate.handleRightClick(player)) {
             e.setCancelled(true);

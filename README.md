@@ -18,10 +18,11 @@ A Minecraft Paper plugin that drops randomized care packages from the sky as wor
 - Auto-drop scheduler with fixed/random intervals and wave drops
 - Full GUI loot table editor (`/supplydrop templates`) with pagination
 - Interactive config GUI (`/supplydrop config`) with number input, world selector, template editor, trap mob editor
-- Per-template settings (display-name, fall-duration) via GUI
+- Per-template settings (display-name, fall-duration, lock-duration) via GUI
 - Preview GUI (`/supplydrop preview`) showing all items with rarity/weight info
 - Landing zone marker — particle ring showing where crate will land
 - Anti-grief — block place/break protection + piston protection around crates
+- Zone protection — anti-camping radius around LOCK/READY crates with merged particle border
 - Async SQLite persistence across server restarts
 - Event history log with pagination and filters (`/supplydrop history`)
 - Notification system with per-player subscriptions
@@ -66,6 +67,7 @@ A Minecraft Paper plugin that drops randomized care packages from the sky as wor
 | `/supplydrop toggle hologram` | Toggle hologram visibility |
 | `/supplydrop toggle announce` | Toggle announcements |
 | `/supplydrop toggle notify` | Toggle personal notifications |
+| `/supplydrop toggle zone` | Toggle zone protection |
 
 ### Notification Commands
 
@@ -79,7 +81,7 @@ A Minecraft Paper plugin that drops randomized care packages from the sky as wor
 The `/supplydrop spawn` command accepts optional conditions:
 
 ```
-/supplydrop spawn <template> [team] [trap] [wave:<count>] [players:<count>] [expiry:<ticks>]
+/supplydrop spawn <template> [team] [trap] [wave:<count>] [players:<count>] [expiry:<ticks>] [lock:<ticks>]
 ```
 
 | Condition | Description |
@@ -89,6 +91,7 @@ The `/supplydrop spawn` command accepts optional conditions:
 | `wave:<count>` | Spawn multiple crates simultaneously |
 | `players:<count>` | Required players for team crate (default: 2) |
 | `expiry:<ticks>` | Custom expiry time (0 = no expiry) |
+| `lock:<ticks>` | Custom lock duration (0 = skip lock phase) |
 
 **Examples:**
 ```bash
@@ -165,6 +168,9 @@ drop:
       - "&b&l{template}"
       - "{team}"
       - "{team-progress}"
+      - "{state}"
+      - "{lock-progress}"
+      - "{lock-time}"
       - "{time}"
       - "&7Right-click to open"
 
@@ -180,6 +186,26 @@ crate:
     - ZOMBIE
     - SKELETON
     - CREEPER
+  lock:
+    enabled: true
+    duration: 200
+    random: false
+    duration-min: 100
+    duration-max: 400
+    sound-lock: "entity.iron_door.close"
+    sound-ready: "entity.player.levelup"
+    ready-notification: true
+    ready-notification-radius: 20
+    break-behavior: "destroy"
+    particle:
+      enabled: true
+      type: ENCHANTMENT_TABLE
+      radius: 1.5
+  zone:
+    enabled: true
+    radius: 25
+    particle: FLAME
+    deny-message: "&c&lSupply Drop &7- &fYou cannot enter the drop zone!"
 
 # Loot rarity tiers (weights are relative, higher = more common)
 rarity:
@@ -287,6 +313,9 @@ notification:
 | `{team-required}` | Players needed |
 | `{team-remaining}` | Players still needed |
 | `{team-progress}` | Visual progress bar |
+| `{lock-progress}` | Lock phase visual progress bar |
+| `{lock-time}` | Lock phase remaining time |
+| `{state}` | Crate state label (Falling, LOCK, READY, etc.) |
 
 ### packages.yml
 
@@ -296,6 +325,7 @@ Define loot tables with weighted items:
 weapons:
   display-name: "&c&lWeapons Crate"
   fall-duration: 3
+  lock-duration: 0
   common:
     items:
       wooden_sword:
@@ -359,14 +389,54 @@ Standard loot crate with random items. Items drop on ground when barrel is broke
 - **Breaking manually**: trap fires + items destroyed
 
 ### Crate Lifecycle
+- **Falling**: parachute system active, cannot be opened
+- **Landing**: barrel created, hologram spawned
+- **Lock Phase**: crate locked, cannot be opened, hologram shows countdown
+- **Ready**: crate unlocked, can be opened
 - **Opened**: hologram removed, after 3 seconds remaining loot drops + barrel destroyed
 - **Expired**: destroyed with NO item drop (server takes the loot)
 - **Normal barrel break**: items drop on ground
 - **Explosion/burn**: items always drop on ground
 - **Anti-grief**: block place/break protection around crates (configurable radius)
 
+### Crate Lock Phase
+
+A configurable lock phase delays access to landed crates:
+- **Config**: `crate.lock.enabled`, `crate.lock.duration`, `crate.lock.random`, `crate.lock.duration-min/max`
+- **Per-template**: Set `lock-duration` in `packages.yml` or via GUI
+- **Bypass**: Use `lock:0` in spawn command to skip lock phase
+- **Break behavior**: Configurable (`destroy` = items lost, `drop` = items drop)
+- **Effects**: Lock particles and sound effects during lock phase
+- **Ready notification**: Nearby players notified when crate unlocks
+
 ### Crate UUID System
 Every crate gets a unique UUID on creation. Short 8-character IDs are displayed in the active list for easy identification. UUIDs are persisted in the database across server restarts.
+
+### Configuration Precedence
+
+Settings follow a clear override chain. Each level overrides the one below it:
+
+```
+Template (per-template) > Context (auto-drop/call/spawn) > Global (crate.*)
+```
+
+| Setting | Template Override | Auto-Drop Override | Call/Spawn Override | Global Default |
+|---|---|---|---|---|
+| **Fall duration** | `packages.yml` `fall-duration` | `auto-drop.fall-duration` | `call.fall-duration` / `spawn.fall-duration` | `drop.fall-duration` |
+| **Expiry** | — | `auto-drop.expiry` (0 = use `crate.expiry`) | — | `crate.expiry` |
+| **Trap chance** | — | `auto-drop.trap-chance` (0 = use `crate.trap-chance`) | — | `crate.trap-chance` |
+| **Trap mobs** | — | `auto-drop.trap-mobs` | — | `crate.trap-mobs` |
+| **Team crate chance** | — | `auto-drop.team-crate-chance` (0 = use `crate.team-open-chance`) | — | `crate.team-open-chance` |
+| **Team crate range** | — | `auto-drop.team-crate-range` | — | `crate.team-open-range` |
+| **Lock duration** | `packages.yml` `lock-duration` | — | `lock:<ticks>` in spawn command | `crate.lock.duration` |
+
+**How it works:**
+- Each setting is carried in `DropOptions`, which Crate reads at creation time
+- `null` field = fall back to global `crate.*` setting
+- `0` for auto-drop overrides = fall back to global (except fall-duration where 0 = use `drop.fall-duration`)
+- `/supplydrop call` uses global `crate.*` settings (no auto-drop overrides)
+- `/supplydrop spawn` uses global `crate.*` settings, with per-command overrides via parameters
+- Auto-drops and wave drops resolve auto-drop-specific overrides into `DropOptions`
 
 ## Features in Detail
 
@@ -376,7 +446,7 @@ Every crate gets a unique UUID on creation. Short 8-character IDs are displayed 
 
 - **Main Menu**: Overview of all settings categories
 - **Auto-Drop Page**: All auto-drop settings with number inputs, toggles, world selector, template editor, trap mob editor
-- **Crate Page**: Crate behavior settings including trap mob management
+- **Crate Page**: Crate behavior settings including lock duration, lock random, trap mob management
 - **Toggles Page**: Quick access to all boolean settings
 - **Hologram Page**: Hologram toggle and line editor
 
@@ -387,6 +457,7 @@ Number inputs feature ±1/±10/±100 buttons, a "Set to 0" button, and confirm/c
 Each template has its own settings GUI accessible from the template list:
 - **Display Name**: Custom barrel name (editable via chat input)
 - **Fall Duration**: Per-template fall time override
+- **Lock Duration**: Per-template lock phase override
 - **Item Count**: View total items in the loot table
 
 ### Template Auto-Drop Editor
@@ -404,6 +475,8 @@ Both crate and auto-drop config pages have clickable trap-mob items that open a 
 
 `/supplydrop active` lists all active crates (landed + falling):
 - Falling crates show `[Falling]` tag with X/Z coordinates
+- Locked crates show `[LOCK Xs]` tag with countdown
+- Ready crates show `[READY]` tag
 - Clickable coordinates teleport you to the crate
 - Short UUID prefix on each entry for identification
 
@@ -436,6 +509,15 @@ Protects the area around supply crates from griefing:
 - Prevents block breaking near crates (except the crate barrel itself)
 - Prevents pistons from pushing/pulling crate barrels
 - Configurable protection radius in blocks
+
+### Zone Protection
+Prevents block interactions around LOCK/READY crates:
+- Configurable radius (default 25 blocks)
+- Block placement and breaking disabled inside the zone
+- Merged particle border: when multiple crates overlap, only the outermost border is shown
+- Visual flame particles show the protected area
+- Toggle with `/supplydrop toggle zone` or config GUI
+- Config: `crate.zone.enabled`, `crate.zone.radius`, `crate.zone.particle`
 
 ### Preview GUI
 `/supplydrop preview <template>` opens a virtual chest showing all items in a loot table. Each item displays its rarity, weight, and effective weight. Supports pagination for large loot tables.

@@ -41,6 +41,8 @@ public class ConfigTogglesPage implements Listener {
                 "§7Broadcast when a supply drop occurs"));
         inv.setItem(14, toggleItem("§eNotification Default", ConfigKeys.NOTIFICATION_DEFAULT_SUBSCRIBE,
                 "§7New players receive drop notifications"));
+        inv.setItem(16, toggleItem("§eZone Protection", ConfigKeys.ZONE_ENABLED,
+                "§7Block place/break around LOCK/READY crates"));
 
         inv.setItem(22, infoItem(Material.ARROW, "§cBack to Menu", "§7Click to return"));
     }

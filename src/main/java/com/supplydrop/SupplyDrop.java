@@ -15,6 +15,7 @@ import com.supplydrop.helpers.DatabaseManager;
 import com.supplydrop.helpers.HistoryManager;
 import com.supplydrop.helpers.AirdropLogger;
 import com.supplydrop.helpers.NotificationManager;
+import com.supplydrop.helpers.ZoneManager;
 import com.supplydrop.listeners.AntiGriefListener;
 import com.supplydrop.listeners.CrateCleanupListener;
 import com.supplydrop.listeners.CrateCloseListener;
@@ -98,8 +99,17 @@ public class SupplyDrop extends JavaPlugin {
             int restored = 0;
             for (DatabaseManager.CrateRecord record : records) {
                 if (record.location().getBlock().getState() instanceof org.bukkit.block.Barrel) {
-                    Crate crate = Crate.createPersisted(record.uuid(), record.location(), record.displayName(),
-                            record.isTrap(), record.isTeamCrate(), record.requiredPlayers());
+                    Crate.State resumeState;
+                    try {
+                        resumeState = Crate.State.valueOf(record.state());
+                    } catch (IllegalArgumentException e) {
+                        resumeState = Crate.State.READY_TO_OPEN;
+                    }
+
+                    Crate crate = Crate.createPersistedInState(record.uuid(), record.location(), record.displayName(),
+                            record.isTrap(), record.isTeamCrate(), record.requiredPlayers(),
+                            resumeState, record.lockDuration(), record.lockStartTime(),
+                            record.expiryTicks(), record.landTime());
                     CrateManager.addCrate(record.location(), crate);
                     restored++;
                 }
@@ -113,6 +123,11 @@ public class SupplyDrop extends JavaPlugin {
                 autoDropScheduler.start();
             }
 
+            // Start zone protection
+            if (ConfigKeys.isZoneEnabled()) {
+                ZoneManager.start(this);
+            }
+
             AirdropLogger.info("SupplyDrop v" + pluginVersion + " enabled.");
         } catch (Exception e) {
             getLogger().severe("Failed to enable SupplyDrop: " + e.getMessage());
@@ -124,6 +139,8 @@ public class SupplyDrop extends JavaPlugin {
     @Override
     public void onDisable() {
         Bukkit.getScheduler().cancelTasks(this);
+
+        ZoneManager.stop();
 
         if (autoDropScheduler != null) {
             autoDropScheduler.stop();

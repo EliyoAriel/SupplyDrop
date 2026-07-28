@@ -36,12 +36,19 @@ drop:
     # Lines of text to display (supports & color codes)
     # Placeholders:
     #   {template}/{name} = display name, {x} = x coord, {z} = z coord
+    #   {state} = crate state (FALLING, LOCKED, READY, etc.)
+    #   {lock-progress} = lock phase visual progress bar
+    #   {lock-time} = lock phase remaining time
     #   {team} = "TEAM CRATE" label, {team-required} = players needed
     #   {team-remaining} = players still needed, {team-progress} = visual progress bar
+    #   {time} = expiry remaining time (shown when READY)
     lines:
       - "&b&l{template}"
       - "{team}"
       - "{team-progress}"
+      - "{state}"
+      - "{lock-progress}"
+      - "{lock-time}"
       - "{time}"
       - "&7Right-click to open"
 
@@ -64,6 +71,45 @@ crate:
     - ZOMBIE
     - SKELETON
     - CREEPER
+  # Lock phase: crate is locked for a duration after landing before it can be opened
+  lock:
+    # Whether the lock phase is enabled
+    enabled: true
+    # Fixed lock duration in ticks (used when random: false)
+    duration: 200
+    # Whether to use random lock duration between duration-min and duration-max
+    random: false
+    # Minimum lock duration in ticks (when random: true)
+    duration-min: 100
+    # Maximum lock duration in ticks (when random: true)
+    duration-max: 400
+    # Sound played when crate enters LOCK state
+    sound-lock: "entity.iron_door.close"
+    # Sound played when crate transitions to READY
+    sound-ready: "entity.player.levelup"
+    # Notify nearby players when crate becomes ready to open
+    ready-notification: true
+    # Radius in blocks to notify players
+    ready-notification-radius: 20
+    # What happens when barrel is broken during LOCK: "destroy" = items lost, "drop" = items drop
+    break-behavior: "destroy"
+    particle:
+      # Show particles around barrel during LOCK
+      enabled: true
+      # Particle type
+      type: ENCHANTMENT_TABLE
+      # Radius around barrel
+      radius: 1.5
+  # Zone protection: prevents block interactions around locked/ready crates
+  zone:
+    # Whether zone protection is enabled
+    enabled: true
+    # Radius in blocks around crate (block place/break disabled inside)
+    radius: 25
+    # Particle type for the zone border
+    particle: FLAME
+    # Message shown when a player tries to build/break inside the zone
+    deny-message: "&c&lSupply Drop &7- &fYou cannot build in the drop zone!"
 
 # Loot rarity tiers (weights are relative, higher = more common)
 rarity:
@@ -135,14 +181,16 @@ auto-drop:
       weight: 30
     supplies:
       weight: 20
-  # Number of crates to drop simultaneously (1 = single drop)
+  # Max crates per drop (random between 2 and this value). 1 = single drop always.
   wave-count: 1
   # Announce settings (inherits from global announce.* unless overridden here)
   announce: true
   announce-actionbar: false
   announce-delay: 100
   coord-reveal-delay: 0
-  # Crate overrides (0 = use global crate.* settings)
+  # Crate overrides: these override crate.* settings for auto-drops only.
+  # 0 = use global crate.* setting (e.g. expiry:0 uses crate.expiry)
+  # Leave at 0 to inherit global defaults, or set > 0 to override.
   expiry: 0
   team-crate-chance: 0
   team-crate-range: 2

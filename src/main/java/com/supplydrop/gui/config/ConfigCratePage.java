@@ -80,6 +80,33 @@ public class ConfigCratePage implements Listener {
                 "§7Current mobs: §f" + String.join(", ", mobs),
                 "§7Click to manage trap mob types"));
 
+        // Lock settings
+        inv.setItem(29, toggleItem("§eLock-Enabled", ConfigKeys.CRATE_LOCK_ENABLED,
+                "§7Lock phase before crate can be opened"));
+
+        inv.setItem(30, settingItem(Material.SAND, "§eLock-Duration", ConfigKeys.CRATE_LOCK_DURATION,
+                fc.getInt(ConfigKeys.CRATE_LOCK_DURATION, 200),
+                "§7Ticks to wait during lock phase",
+                "§7200 = 10 seconds, 0 = instant"));
+
+        inv.setItem(31, toggleItem("§eLock-Random", ConfigKeys.CRATE_LOCK_RANDOM,
+                "§7Randomize lock duration per crate"));
+
+        inv.setItem(32, settingItem(Material.SPYGLASS, "§eLock-Dur-Min", ConfigKeys.CRATE_LOCK_DURATION_MIN,
+                fc.getInt(ConfigKeys.CRATE_LOCK_DURATION_MIN, 100),
+                "§7Minimum lock duration (ticks) if random",
+                "§7100 = 5 seconds"));
+
+        inv.setItem(33, settingItem(Material.SPYGLASS, "§eLock-Dur-Max", ConfigKeys.CRATE_LOCK_DURATION_MAX,
+                fc.getInt(ConfigKeys.CRATE_LOCK_DURATION_MAX, 400),
+                "§7Maximum lock duration (ticks) if random",
+                "§7400 = 20 seconds"));
+
+        inv.setItem(34, settingItem(Material.MAGMA_CREAM, "§eZone-Radius", ConfigKeys.ZONE_RADIUS,
+                (int) fc.getDouble(ConfigKeys.ZONE_RADIUS, 25),
+                "§7Protection radius around LOCK/READY crates",
+                "§7Players are pushed back when entering"));
+
         inv.setItem(40, infoItem(Material.ARROW, "§cBack to Menu", "§7Click to return"));
     }
 
@@ -95,7 +122,8 @@ public class ConfigCratePage implements Listener {
 
     private boolean isSettingSlot(int slot) {
         return slot == 10 || slot == 11 || slot == 12 || slot == 14 || slot == 15
-                || slot == 19 || slot == 21 || slot == 28 || slot == 40;
+                || slot == 19 || slot == 21 || slot == 28 || slot == 29
+                || slot == 30 || slot == 31 || slot == 32 || slot == 33 || slot == 34 || slot == 40;
     }
 
     private ItemStack settingItem(Material mat, String name, String configKey, int current, String... lore) {
@@ -109,6 +137,21 @@ public class ConfigCratePage implements Listener {
             fullLore.add("§7Click to edit this value");
             fullLore.add("§8Config: " + configKey);
             meta.setLore(fullLore);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    private ItemStack toggleItem(String name, String configKey, String description) {
+        boolean enabled = getFileConfig().getBoolean(configKey, false);
+        Material mat = enabled ? Material.EMERALD_BLOCK : Material.REDSTONE_BLOCK;
+        String status = enabled ? "§aENABLED" : "§cDISABLED";
+
+        ItemStack item = new ItemStack(mat);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(name + ": " + status);
+            meta.setLore(List.of(description, "", "§7Click to toggle", "§8Config: " + configKey));
             item.setItemMeta(meta);
         }
         return item;
@@ -140,6 +183,18 @@ public class ConfigCratePage implements Listener {
         if (slot == 40) { new ConfigMainMenu().openInventory(p); return; }
         if (slot == 28) { new ConfigTrapMobsGui(ConfigKeys.CRATE_TRAP_MOBS, "§9Crate Trap Mobs", () -> new ConfigCratePage().openInventory(p)).openInventory(p); return; }
 
+        // Toggle buttons
+        if (slot == 29 || slot == 31) {
+            String configKey = slot == 29 ? ConfigKeys.CRATE_LOCK_ENABLED : ConfigKeys.CRATE_LOCK_RANDOM;
+            boolean current = getFileConfig().getBoolean(configKey, false);
+            saveConfigValue(configKey, !current);
+            String label = slot == 29 ? "Lock-Enabled" : "Lock-Random";
+            ChatHandler.send(p, label + " §aset to §f" + (!current) + "§7.");
+            initializeItems();
+            return;
+        }
+
+        // Number input buttons
         String configKey = getConfigKeyForSlot(slot);
         if (configKey != null) {
             int current = getFileConfig().getInt(configKey, 0);
@@ -164,6 +219,10 @@ public class ConfigCratePage implements Listener {
             case 15 -> ConfigKeys.CRATE_TEAM_OPEN_RANGE;
             case 19 -> ConfigKeys.CRATE_TRAP_CHANCE;
             case 21 -> ConfigKeys.DROP_FALL_DURATION;
+            case 30 -> ConfigKeys.CRATE_LOCK_DURATION;
+            case 32 -> ConfigKeys.CRATE_LOCK_DURATION_MIN;
+            case 33 -> ConfigKeys.CRATE_LOCK_DURATION_MAX;
+            case 34 -> ConfigKeys.ZONE_RADIUS;
             default -> null;
         };
     }
@@ -177,6 +236,10 @@ public class ConfigCratePage implements Listener {
             case 15 -> "Team-Range";
             case 19 -> "Trap-Chance%";
             case 21 -> "Fall-Duration";
+            case 30 -> "Lock-Duration";
+            case 32 -> "Lock-Dur-Min";
+            case 33 -> "Lock-Dur-Max";
+            case 34 -> "Zone-Radius";
             default -> "Setting";
         };
     }

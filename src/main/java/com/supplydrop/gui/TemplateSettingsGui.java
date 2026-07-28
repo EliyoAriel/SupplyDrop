@@ -26,7 +26,7 @@ import java.util.List;
  * Per-template settings GUI.
  * Layout (27 slots):
  *   Row 0: glass | title | glass
- *   Row 1: [display-name] [fall-duration] [item-count]
+ *   Row 1: [display-name] [fall-duration] [lock-duration] [item-count]
  *   Row 2: glass | [BACK] | glass
  */
 public class TemplateSettingsGui implements Listener {
@@ -109,6 +109,31 @@ public class TemplateSettingsGui implements Listener {
         }
         inv.setItem(11, fallDurItem);
 
+        // Lock duration
+        int lockDuration = pkg.getLockDuration();
+        ItemStack lockDurItem = new ItemStack(Material.TRIPWIRE_HOOK);
+        ItemMeta ldMeta = lockDurItem.getItemMeta();
+        if (ldMeta != null) {
+            ldMeta.setDisplayName("§eLock Duration");
+            if (lockDuration > 0) {
+                ldMeta.setLore(List.of(
+                        "§7Current: §f" + lockDuration + "s §7(" + (lockDuration * 20) + " ticks)",
+                        "",
+                        "§aClick to change",
+                        "§7Set to §f0 §7to use global default"
+                ));
+            } else {
+                ldMeta.setLore(List.of(
+                        "§7Current: §f0 §7(use global default)",
+                        "",
+                        "§aClick to change",
+                        "§7Overrides the global lock duration"
+                ));
+            }
+            lockDurItem.setItemMeta(ldMeta);
+        }
+        inv.setItem(12, lockDurItem);
+
         // Item count info
         int itemCount = pkg.getLootTable().size();
         ItemStack countItem = new ItemStack(Material.CHEST);
@@ -123,7 +148,7 @@ public class TemplateSettingsGui implements Listener {
             ));
             countItem.setItemMeta(countMeta);
         }
-        inv.setItem(12, countItem);
+        inv.setItem(13, countItem);
 
         // Row 2: glass + back
         for (int i = 18; i < 27; i++) {
@@ -187,6 +212,25 @@ public class TemplateSettingsGui implements Listener {
                             });
                         },
                         // onCancel → reopen settings
+                        () -> Bukkit.getScheduler().runTask(plugin, () -> {
+                            new TemplateSettingsGui(pkg).openInventory(p);
+                        })
+                ).openInventory(p);
+            }
+            case 12 -> {
+                // Lock duration → ConfigNumberInputGui
+                p.closeInventory();
+                int currentLd = pkg.getLockDuration();
+                new ConfigNumberInputGui(
+                        "lock-duration:" + pkg.getName(),
+                        pkg.getName() + " lock-duration",
+                        currentLd, 0, 600,
+                        newVal -> {
+                            PackageManager.setLockDuration(pkg.getName(), newVal);
+                            Bukkit.getScheduler().runTask(plugin, () -> {
+                                new TemplateSettingsGui(pkg).openInventory(p);
+                            });
+                        },
                         () -> Bukkit.getScheduler().runTask(plugin, () -> {
                             new TemplateSettingsGui(pkg).openInventory(p);
                         })

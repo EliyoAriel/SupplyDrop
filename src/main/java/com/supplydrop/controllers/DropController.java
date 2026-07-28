@@ -27,7 +27,6 @@ public class DropController {
     private static final double HALF_BLOCK = 0.5;
     private static final Random random = new Random();
 
-    // Track time since last successful drop for loot scaling
     private static long lastDropTime = System.currentTimeMillis();
     private static int dropsWithoutLoot = 0;
 
@@ -69,32 +68,48 @@ public class DropController {
 
     /**
      * Call a drop using a specific loot table template.
+     * Uses crate.* global settings (no overrides).
      */
     public static void callNamedDrop(Package pkg, Player player) throws SkyNotClearException {
         int fallDuration = pkg.getFallDuration() > 0 ? pkg.getFallDuration() : ConfigKeys.getCallFallDuration();
         DropOptions options = DropOptions.createDefault().withFallDuration(fallDuration);
         World world = player.getWorld();
-        Location playerLoc = player.getLocation();
-        Location spawnLocation = getSpawnLocation(world, playerLoc, options);
+        Location spawnLocation = getSpawnLocation(world, player.getLocation(), options);
 
         int bonusRolls = calculateBonusRolls();
         List<ItemStack> loot = rollLoot(pkg.getLootTable(), bonusRolls);
-        boolean isTrap = rollTrapChance();
+        boolean isTrap = rollTrapChance(ConfigKeys.getCrateTrapChance());
         dropCrateAtLocation(spawnLocation, world, loot, options, pkg.getDisplayName(), isTrap);
     }
 
     /**
      * Drop at a specific location (for auto-drops).
+     * Resolves auto-drop.* overrides, falling back to crate.* for null fields.
      */
     public static void dropAtLocation(Package pkg, World world, Location loc) throws SkyNotClearException {
         int fallDuration = pkg.getFallDuration() > 0 ? pkg.getFallDuration() : ConfigKeys.getAutoDropFallDuration();
-        int expiry = ConfigKeys.getAutoDropExpiry();
-        DropOptions options = DropOptions.createDefault().withFallDuration(fallDuration).withExpiryTicks(expiry);
+
+        // Resolve auto-drop overrides — null means use crate.* global
+        Integer autoExpiry = ConfigKeys.getAutoDropExpiry() > 0 ? ConfigKeys.getAutoDropExpiry() : null;
+        Integer autoTrapChance = ConfigKeys.getAutoDropTrapChance() > 0 ? ConfigKeys.getAutoDropTrapChance() : null;
+        List<String> autoTrapMobs = ConfigKeys.getAutoDropTrapMobs();
+        Integer autoTeamChance = ConfigKeys.getAutoDropTeamCrateChance() > 0 ? ConfigKeys.getAutoDropTeamCrateChance() : null;
+        Integer autoTeamRange = ConfigKeys.getAutoDropTeamCrateRange() > 2 ? ConfigKeys.getAutoDropTeamCrateRange() : null;
+
+        DropOptions options = DropOptions.createDefault()
+                .withFallDuration(fallDuration)
+                .withExpiryTicks(autoExpiry != null ? autoExpiry : 0)
+                .withTrapChance(autoTrapChance)
+                .withTrapMobs(autoTrapMobs)
+                .withTeamCrateChance(autoTeamChance)
+                .withTeamCrateRange(autoTeamRange);
+
         Location spawnLocation = getSpawnLocation(world, loc, options);
 
         int bonusRolls = calculateBonusRolls();
         List<ItemStack> loot = rollLoot(pkg.getLootTable(), bonusRolls);
-        boolean isTrap = rollTrapChance();
+        int trapChance = autoTrapChance != null ? autoTrapChance : ConfigKeys.getCrateTrapChance();
+        boolean isTrap = rollTrapChance(trapChance);
         dropCrateAtLocation(spawnLocation, world, loot, options, pkg.getDisplayName(), isTrap);
     }
 
@@ -104,12 +119,24 @@ public class DropController {
     public static List<Crate> dropWave(Package pkg, World world, Location centerLoc, int count) throws SkyNotClearException {
         List<Crate> crates = new ArrayList<>();
         int fallDuration = pkg.getFallDuration() > 0 ? pkg.getFallDuration() : ConfigKeys.getAutoDropFallDuration();
-        int expiry = ConfigKeys.getAutoDropExpiry();
-        DropOptions options = DropOptions.createDefault().withFallDuration(fallDuration).withExpiryTicks(expiry);
+
+        Integer autoExpiry = ConfigKeys.getAutoDropExpiry() > 0 ? ConfigKeys.getAutoDropExpiry() : null;
+        Integer autoTrapChance = ConfigKeys.getAutoDropTrapChance() > 0 ? ConfigKeys.getAutoDropTrapChance() : null;
+        List<String> autoTrapMobs = ConfigKeys.getAutoDropTrapMobs();
+        Integer autoTeamChance = ConfigKeys.getAutoDropTeamCrateChance() > 0 ? ConfigKeys.getAutoDropTeamCrateChance() : null;
+        Integer autoTeamRange = ConfigKeys.getAutoDropTeamCrateRange() > 2 ? ConfigKeys.getAutoDropTeamCrateRange() : null;
+
+        DropOptions options = DropOptions.createDefault()
+                .withFallDuration(fallDuration)
+                .withExpiryTicks(autoExpiry != null ? autoExpiry : 0)
+                .withTrapChance(autoTrapChance)
+                .withTrapMobs(autoTrapMobs)
+                .withTeamCrateChance(autoTeamChance)
+                .withTeamCrateRange(autoTeamRange);
+
         int radius = ConfigKeys.getAutoDropRandomRadius();
 
         for (int i = 0; i < count; i++) {
-            // Scatter crates around the center location
             Location offset = centerLoc.clone().add(
                     (random.nextDouble() - 0.5) * radius * 0.2,
                     0,
@@ -119,7 +146,8 @@ public class DropController {
                 Location spawnLocation = getSpawnLocation(world, offset, options);
                 int bonusRolls = calculateBonusRolls();
                 List<ItemStack> loot = rollLoot(pkg.getLootTable(), bonusRolls);
-                boolean isTrap = rollTrapChance();
+                int trapChance = autoTrapChance != null ? autoTrapChance : ConfigKeys.getCrateTrapChance();
+                boolean isTrap = rollTrapChance(trapChance);
                 Crate crate = dropCrateAtLocation(spawnLocation, world, loot, options, pkg.getDisplayName(), isTrap);
                 if (crate != null) crates.add(crate);
             } catch (SkyNotClearException e) {
@@ -129,30 +157,21 @@ public class DropController {
         return crates;
     }
 
-    /**
-     * Mark a drop as completed (for loot scaling tracking).
-     */
     public static void markDropCompleted() {
         lastDropTime = System.currentTimeMillis();
         dropsWithoutLoot++;
     }
 
-    /**
-     * Mark loot as collected (resets escalating counter).
-     */
     public static void markLootCollected() {
         dropsWithoutLoot = 0;
     }
 
-    /**
-     * Calculate bonus rolls based on loot scaling config.
-     */
     private static int calculateBonusRolls() {
         if (!ConfigKeys.isAutoDropLootScaling()) return 0;
 
         long elapsed = System.currentTimeMillis() - lastDropTime;
         long intervalTicks = ConfigKeys.getAutoDropInterval();
-        long intervalMs = intervalTicks * 50; // ticks to ms
+        long intervalMs = intervalTicks * 50;
 
         if (intervalMs <= 0) return 0;
 
@@ -162,17 +181,13 @@ public class DropController {
     }
 
     /**
-     * Roll trap chance.
+     * Roll trap chance with the given value.
      */
-    private static boolean rollTrapChance() {
-        int chance = ConfigKeys.getCrateTrapChance();
+    private static boolean rollTrapChance(int chance) {
         if (chance <= 0) return false;
         return random.nextInt(100) < chance;
     }
 
-    /**
-     * Roll items from a loot table based on configured min/max rolls + bonus.
-     */
     private static List<ItemStack> rollLoot(LootTable table, int bonusRolls) {
         int min = ConfigKeys.getMinRolls();
         int max = ConfigKeys.getMaxRolls() + bonusRolls;
@@ -204,17 +219,23 @@ public class DropController {
     /**
      * Bypass spawn: force specific conditions (for admin commands).
      */
-    public static void spawnForced(Package pkg, Player player, boolean forceTeam, boolean forceTrap, int teamPlayers, int expiryTicks) throws SkyNotClearException {
+    public static void spawnForced(Package pkg, Player player, boolean forceTeam, boolean forceTrap, int teamPlayers, int expiryTicks, int lockOverride) throws SkyNotClearException {
         int fallDuration = pkg.getFallDuration() > 0 ? pkg.getFallDuration() : ConfigKeys.getSpawnFallDuration();
-        DropOptions options = DropOptions.createDefault().withExpiryTicks(expiryTicks).withFallDuration(fallDuration);
+        DropOptions options = DropOptions.createDefault()
+                .withExpiryTicks(expiryTicks)
+                .withFallDuration(fallDuration)
+                .withTeamCrateChance(forceTeam ? 100 : 0)
+                .withTeamCrateRange(teamPlayers)
+                .withTrapChance(forceTrap ? 100 : 0);
+
         World world = player.getWorld();
         Location spawnLocation = getSpawnLocation(world, player.getLocation(), options);
 
         List<ItemStack> loot = rollLoot(pkg.getLootTable(), 0);
         Crate crate = new Crate(spawnLocation.clone(), world, loot, options, pkg.getDisplayName(), forceTrap);
 
-        if (forceTeam) {
-            crate.forceTeamCrate(teamPlayers);
+        if (lockOverride >= 0) {
+            crate.setLockDurationOverride(lockOverride);
         }
 
         crate.dropCrate();
@@ -223,9 +244,15 @@ public class DropController {
     /**
      * Bypass wave spawn: force multiple crates with conditions.
      */
-    public static void spawnWaveForced(Package pkg, Player player, int count, boolean forceTeam, boolean forceTrap, int teamPlayers, int expiryTicks) throws SkyNotClearException {
+    public static void spawnWaveForced(Package pkg, Player player, int count, boolean forceTeam, boolean forceTrap, int teamPlayers, int expiryTicks, int lockOverride) throws SkyNotClearException {
         int fallDuration = pkg.getFallDuration() > 0 ? pkg.getFallDuration() : ConfigKeys.getSpawnFallDuration();
-        DropOptions options = DropOptions.createDefault().withExpiryTicks(expiryTicks).withFallDuration(fallDuration);
+        DropOptions options = DropOptions.createDefault()
+                .withExpiryTicks(expiryTicks)
+                .withFallDuration(fallDuration)
+                .withTeamCrateChance(forceTeam ? 100 : 0)
+                .withTeamCrateRange(teamPlayers)
+                .withTrapChance(forceTrap ? 100 : 0);
+
         World world = player.getWorld();
         Location centerLoc = player.getLocation();
 
@@ -240,8 +267,8 @@ public class DropController {
                 List<ItemStack> loot = rollLoot(pkg.getLootTable(), 0);
                 Crate crate = new Crate(spawnLocation.clone(), world, loot, options, pkg.getDisplayName(), forceTrap);
 
-                if (forceTeam) {
-                    crate.forceTeamCrate(teamPlayers);
+                if (lockOverride >= 0) {
+                    crate.setLockDurationOverride(lockOverride);
                 }
 
                 crate.dropCrate();

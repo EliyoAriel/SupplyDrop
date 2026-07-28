@@ -50,6 +50,7 @@ public class SupplyDropTabCompleter implements TabCompleter {
                 if (!alreadyUsed.contains("wave:")) conditions.add("wave:");
                 if (!alreadyUsed.contains("players:")) conditions.add("players:");
                 if (!alreadyUsed.contains("expiry:")) conditions.add("expiry:");
+                if (!alreadyUsed.contains("lock:")) conditions.add("lock:");
                 return conditions;
             }
 

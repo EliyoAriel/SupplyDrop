@@ -13,6 +13,7 @@ import org.bukkit.event.block.BlockPistonRetractEvent;
 
 import com.supplydrop.config.ConfigKeys;
 import com.supplydrop.helpers.CrateManager;
+import com.supplydrop.helpers.ZoneManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,10 +27,19 @@ public class AntiGriefListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onBlockPlace(BlockPlaceEvent e) {
+        Block placed = e.getBlock();
+
+        // Zone protection: block all place inside LOCK/READY crate zones
+        if (ZoneManager.isInZone(placed.getLocation())) {
+            e.setCancelled(true);
+            e.getPlayer().sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&',
+                    ConfigKeys.getZoneDenyMessage()));
+            return;
+        }
+
         int radius = ConfigKeys.getCrateProtectionRadius();
         if (radius <= 0) return;
 
-        Block placed = e.getBlock();
         if (!isNearCrate(placed.getLocation(), radius)) return;
 
         e.setCancelled(true);
@@ -42,10 +52,19 @@ public class AntiGriefListener implements Listener {
         // Don't handle crate barrel breaks — that's CrateDestroyListener
         if (e.getBlock().getType() == Material.BARREL) return;
 
+        Block broken = e.getBlock();
+
+        // Zone protection: block all break inside LOCK/READY crate zones
+        if (ZoneManager.isInZone(broken.getLocation())) {
+            e.setCancelled(true);
+            e.getPlayer().sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&',
+                    ConfigKeys.getZoneDenyMessage()));
+            return;
+        }
+
         int radius = ConfigKeys.getCrateProtectionRadius();
         if (radius <= 0) return;
 
-        Block broken = e.getBlock();
         if (!isNearCrate(broken.getLocation(), radius)) return;
 
         e.setCancelled(true);

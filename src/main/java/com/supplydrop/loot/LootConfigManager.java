@@ -31,12 +31,15 @@ public class LootConfigManager {
     private final Map<String, LootTable> lootTables = new HashMap<>();
     private final Map<String, String> displayNames = new HashMap<>();
     private final Map<String, Integer> fallDurations = new HashMap<>();
+    private final Map<String, Integer> lockDurations = new HashMap<>();
     private FileConfiguration config;
 
     public void load(FileConfiguration config) {
         this.config = config;
         lootTables.clear();
         displayNames.clear();
+        fallDurations.clear();
+        lockDurations.clear();
 
         ConfigurationSection root = config.getConfigurationSection("packages");
         if (root == null) root = config; // fallback: treat root as templates
@@ -55,6 +58,12 @@ public class LootConfigManager {
             int fallDuration = templateSection.getInt("fall-duration", 0);
             if (fallDuration > 0) {
                 fallDurations.put(templateName, fallDuration);
+            }
+
+            // Read optional lock-duration
+            int lockDuration = templateSection.getInt("lock-duration", 0);
+            if (lockDuration > 0) {
+                lockDurations.put(templateName, lockDuration);
             }
 
             LootTable table = new LootTable(templateName);
@@ -120,6 +129,18 @@ public class LootConfigManager {
         }
     }
 
+    public int getLockDuration(String templateName) {
+        return lockDurations.getOrDefault(templateName, 0);
+    }
+
+    public void setLockDuration(String templateName, int lockDuration) {
+        if (lockDuration <= 0) {
+            lockDurations.remove(templateName);
+        } else {
+            lockDurations.put(templateName, lockDuration);
+        }
+    }
+
     public void createTable(String name) {
         if (lootTables.containsKey(name)) return;
         lootTables.put(name, new LootTable(name));
@@ -162,6 +183,12 @@ public class LootConfigManager {
             int fallDur = fallDurations.getOrDefault(entry.getKey(), 0);
             if (fallDur > 0) {
                 templateSection.set("fall-duration", fallDur);
+            }
+
+            // Write lock-duration if set (>0)
+            int lockDur = lockDurations.getOrDefault(entry.getKey(), 0);
+            if (lockDur > 0) {
+                templateSection.set("lock-duration", lockDur);
             }
 
             for (Rarity rarity : RarityRegistry.getAll()) {

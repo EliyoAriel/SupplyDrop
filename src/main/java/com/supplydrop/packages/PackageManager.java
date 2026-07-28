@@ -38,7 +38,8 @@ public class PackageManager {
             if (table != null) {
                 String displayName = lootManager.getDisplayName(name);
                 int fallDuration = lootManager.getFallDuration(name);
-                packages.put(name, new Package(name, table, displayName, fallDuration));
+                int lockDuration = lootManager.getLockDuration(name);
+                packages.put(name, new Package(name, table, displayName, fallDuration, lockDuration));
             }
         }
 
@@ -86,6 +87,15 @@ public class PackageManager {
         Package pkg = packages.get(name);
         if (pkg != null) {
             pkg.setFallDuration(fallDuration);
+        }
+        saveConfig();
+    }
+
+    public static void setLockDuration(String name, int lockDuration) {
+        lootManager.setLockDuration(name, lockDuration);
+        Package pkg = packages.get(name);
+        if (pkg != null) {
+            pkg.setLockDuration(lockDuration);
         }
         saveConfig();
     }
