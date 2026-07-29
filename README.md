@@ -724,6 +724,25 @@ Tracks auto-drop performance across server runs:
 - Scheduled real-world time triggers
 - Configurable actionbar countdown warnings
 
+## Rewind Integration
+
+Optionally integrates with [**Rewind**](https://github.com/EliyoAriel/Rewind) — excludes crate chunks from Rewind's auto-restore so crates don't get removed.
+
+On crate land, SupplyDrop tells Rewind to exclude the crate's chunk area. On destroy, the exclusion is lifted. Ref-counted so multiple crates in one chunk don't collide. No compile dependency — uses reflection.
+
+### Configuration
+
+```yaml
+rewind-integration:
+  enabled: true
+  exclusion-radius: 1
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `enabled` | `true` | Toggle Rewind integration on/off |
+| `exclusion-radius` | `1` | Chunks excluded around each crate (1 = 3×3 chunk area, 2 = 5×5, etc.) |
+
 ## Building
 
 ```bash
@@ -742,4 +761,4 @@ Output: `target/SupplyDrop-1.0.0-SNAPSHOT.jar`
 
 ## License
 
-MIT
+[GPL-3.0](LICENSE)

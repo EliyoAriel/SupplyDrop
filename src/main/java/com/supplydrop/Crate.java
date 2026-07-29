@@ -13,6 +13,7 @@ import com.supplydrop.hologram.Hologram;
 import com.supplydrop.helpers.AirdropLogger;
 import com.supplydrop.helpers.CrateManager;
 import com.supplydrop.helpers.DatabaseManager;
+import com.supplydrop.helpers.RewindIntegration;
 
 import com.supplydrop.packages.Package;
 import com.supplydrop.packages.PackageManager;
@@ -232,6 +233,9 @@ public class Crate {
 
         // Transition to LOCK or READY
         startLock();
+
+        // Notify Rewind to exclude chunks around this crate
+        RewindIntegration.onCrateLand(this);
     }
 
     // ─── LOCK PHASE ─────────────────────────────────────────────────
@@ -449,6 +453,8 @@ public class Crate {
             landingZoneTask.cancel();
             landingZoneTask = null;
         }
+
+        RewindIntegration.onCrateDestroy(this);
     }
 
     /**

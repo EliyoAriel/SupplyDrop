@@ -15,6 +15,7 @@ import com.supplydrop.helpers.DatabaseManager;
 import com.supplydrop.helpers.HistoryManager;
 import com.supplydrop.helpers.AirdropLogger;
 import com.supplydrop.helpers.NotificationManager;
+import com.supplydrop.helpers.RewindIntegration;
 import com.supplydrop.helpers.ZoneManager;
 import com.supplydrop.listeners.AntiGriefListener;
 import com.supplydrop.listeners.CrateCleanupListener;
@@ -66,6 +67,8 @@ public class SupplyDrop extends JavaPlugin {
             configuration = new Config(this);
             configuration.saveDefaultConfig();
             configuration.getConfig();
+
+            RewindIntegration.init();
 
             ChatTheme.init(configuration);
             ChatHandler.init(this);
@@ -132,6 +135,8 @@ public class SupplyDrop extends JavaPlugin {
             if (restored > 0) {
                 AirdropLogger.info("Restored " + restored + " crate(s) from previous session.");
             }
+
+            RewindIntegration.registerActiveCrates();
 
             if (ConfigKeys.isAutoDropEnabled()) {
                 autoDropScheduler = new AutoDropScheduler(this);
