@@ -27,6 +27,10 @@ import com.supplydrop.loot.Rarity;
 import com.supplydrop.loot.RarityRegistry;
 import com.supplydrop.packages.PackageManager;
 import com.supplydrop.packages.PackagesGui;
+import com.supplydrop.announce.AnnouncementManager;
+import com.supplydrop.schedule.ScheduledDropManager;
+import com.supplydrop.seasons.SeasonManager;
+import com.supplydrop.stats.AutoDropStats;
 
 import org.bukkit.Bukkit;
 import org.bukkit.event.HandlerList;
@@ -43,6 +47,9 @@ public class SupplyDrop extends JavaPlugin {
     private static PackagesConfig packagesConfiguration;
     private static PackagesGui packagesGui;
     private AutoDropScheduler autoDropScheduler;
+    private SeasonManager seasonManager;
+    private ScheduledDropManager scheduledDropManager;
+    private AutoDropStats autoDropStats;
     private final ConcurrentHashMap<UUID, Boolean> pendingTemplateCreations = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, WeightEditData> pendingWeightEdits = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, java.util.function.Consumer<Integer>> pendingNumberInputs = new ConcurrentHashMap<>();
@@ -79,6 +86,14 @@ public class SupplyDrop extends JavaPlugin {
 
             // Load rarity tiers from config
             RarityRegistry.load(configuration.getConfig().getConfigurationSection("rarities"));
+
+            seasonManager = new SeasonManager();
+            seasonManager.load(configuration);
+
+            AnnouncementManager.load(configuration);
+
+            autoDropStats = new AutoDropStats(getDataFolder());
+            autoDropStats.load();
 
             PackageManager.reload();
 
@@ -123,6 +138,11 @@ public class SupplyDrop extends JavaPlugin {
                 autoDropScheduler.start();
             }
 
+            if (ConfigKeys.isAutoDropScheduledEnabled()) {
+                scheduledDropManager = new ScheduledDropManager(this);
+                scheduledDropManager.start();
+            }
+
             // Start zone protection
             if (ConfigKeys.isZoneEnabled()) {
                 ZoneManager.start(this);
@@ -142,9 +162,18 @@ public class SupplyDrop extends JavaPlugin {
 
         ZoneManager.stop();
 
+        if (scheduledDropManager != null) {
+            scheduledDropManager.stop();
+            scheduledDropManager = null;
+        }
+
         if (autoDropScheduler != null) {
             autoDropScheduler.stop();
             autoDropScheduler = null;
+        }
+
+        if (autoDropStats != null) {
+            autoDropStats.save();
         }
 
         CrateManager.clearAll();
@@ -181,6 +210,16 @@ public class SupplyDrop extends JavaPlugin {
             autoDropScheduler = new AutoDropScheduler(this);
             autoDropScheduler.start();
         }
+
+        // Also restart scheduled drop manager
+        if (scheduledDropManager != null) {
+            scheduledDropManager.stop();
+            scheduledDropManager = null;
+        }
+        if (ConfigKeys.isAutoDropScheduledEnabled()) {
+            scheduledDropManager = new ScheduledDropManager(this);
+            scheduledDropManager.start();
+        }
     }
 
     public static SupplyDrop getPluginInstance() {
@@ -201,6 +240,22 @@ public class SupplyDrop extends JavaPlugin {
 
     public static PackagesGui getPackagesGui() {
         return packagesGui;
+    }
+
+    public AutoDropScheduler getAutoDropScheduler() {
+        return autoDropScheduler;
+    }
+
+    public SeasonManager getSeasonManager() {
+        return seasonManager;
+    }
+
+    public AutoDropStats getAutoDropStats() {
+        return autoDropStats;
+    }
+
+    public ScheduledDropManager getScheduledDropManager() {
+        return scheduledDropManager;
     }
 
     public void setPendingTemplateCreation(UUID playerId) {

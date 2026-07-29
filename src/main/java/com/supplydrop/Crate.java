@@ -598,6 +598,22 @@ public class Crate {
                         .replace("{team-progress}", "");
             }
 
+            // Escalation placeholder
+            if (ConfigKeys.isAutoDropEscalationEnabled()) {
+                Config cfg = SupplyDrop.getConfiguration();
+                if (cfg != null) {
+                    int level = cfg.getEscalationLevel();
+                    int effectiveChance = Math.min(
+                            ConfigKeys.getCrateTrapChance() + level * ConfigKeys.getAutoDropEscalationIncrement(),
+                            ConfigKeys.getAutoDropEscalationCap());
+                    processed = processed.replace("{escalation}", String.valueOf(effectiveChance));
+                } else {
+                    processed = processed.replace("{escalation}", "0");
+                }
+            } else {
+                processed = processed.replace("{escalation}", "0");
+            }
+
             lines.add(processed);
         }
 

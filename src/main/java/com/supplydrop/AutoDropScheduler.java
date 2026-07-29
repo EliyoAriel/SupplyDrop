@@ -2,6 +2,7 @@ package com.supplydrop;
 
 import com.supplydrop.config.ConfigKeys;
 import com.supplydrop.config.ConfigKeys.TemplateWeight;
+import com.supplydrop.config.DropOptions;
 import com.supplydrop.controllers.DropController;
 import com.supplydrop.exceptions.SkyNotClearException;
 import com.supplydrop.helpers.AirdropLogger;
@@ -10,8 +11,11 @@ import com.supplydrop.helpers.ChatTheme;
 import com.supplydrop.helpers.NotificationManager;
 import com.supplydrop.packages.Package;
 import com.supplydrop.packages.PackageManager;
-
-import net.kyori.adventure.text.Component;
+import com.supplydrop.announce.AnnouncementManager;
+import com.supplydrop.chain.ChainManager;
+import com.supplydrop.seasons.Season;
+import com.supplydrop.stats.AutoDropStats;
+import com.supplydrop.warning.DropWarning;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -19,18 +23,32 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 import java.util.Random;
 
 public class AutoDropScheduler {
 
+    public record QueuedDrop(String templateName, int waveCount, Location location, long queuedAt) {}
+
     private final SupplyDrop plugin;
+    private final ChainManager chainManager;
+    private final DropWarning dropWarning;
     private BukkitTask schedulerTask;
+    private BukkitTask pollTask;
+    private final Deque<QueuedDrop> queue = new ArrayDeque<>();
     private final Random random = new Random();
     private boolean running = false;
 
     public AutoDropScheduler(SupplyDrop plugin) {
         this.plugin = plugin;
+        this.chainManager = new ChainManager();
+        this.dropWarning = new DropWarning();
+    }
+
+    public ChainManager getChainManager() {
+        return chainManager;
     }
 
     public void start() {
@@ -47,6 +65,7 @@ public class AutoDropScheduler {
         }
 
         scheduleNextDrop();
+        startQueuePoll();
         running = true;
         AirdropLogger.info("Auto-drop scheduler started.");
     }
@@ -56,7 +75,85 @@ public class AutoDropScheduler {
             schedulerTask.cancel();
         }
         schedulerTask = null;
+        stopQueuePoll();
+        queue.clear();
+        dropWarning.cancelAll();
         running = false;
+    }
+
+    private void startQueuePoll() {
+        if (!ConfigKeys.isAutoDropQueueEnabled()) return;
+        int interval = ConfigKeys.getAutoDropQueuePollInterval();
+        pollTask = Bukkit.getScheduler().runTaskTimer(plugin, this::pollQueue, interval, interval);
+    }
+
+    private void stopQueuePoll() {
+        if (pollTask != null && !pollTask.isCancelled()) {
+            pollTask.cancel();
+        }
+        pollTask = null;
+    }
+
+    private void pollQueue() {
+        if (queue.isEmpty()) return;
+
+        QueuedDrop queued = queue.peek();
+        if (queued == null) return;
+
+        Package pkg = PackageManager.get(queued.templateName());
+        if (pkg == null) {
+            queue.poll();
+            return;
+        }
+
+        World world = (World) queued.location().getWorld();
+        if (world == null) {
+            queue.poll();
+            return;
+        }
+
+        try {
+            DropController.getSpawnLocation(world, queued.location(),
+                    DropOptions.createDefault());
+            queue.poll();
+            int onlineCount = world.getPlayers().size();
+            int playerBonusRolls = ConfigKeys.getAutoDropBonusRollsForPlayers(onlineCount);
+
+            if (queued.waveCount() > 1) {
+                DropController.dropWave(pkg, world, queued.location(), queued.waveCount(), playerBonusRolls);
+            } else {
+                DropController.dropAtLocation(pkg, world, queued.location(), playerBonusRolls);
+            }
+            DropController.markDropCompleted();
+            AirdropLogger.info("Queued drop fired: " + queued.templateName() + " at " +
+                    queued.location().getBlockX() + ", " + queued.location().getBlockZ());
+        } catch (SkyNotClearException e) {
+            // Still not clear, leave in queue
+        }
+    }
+
+    public void addToQueue(String templateName, int waveCount, Location location) {
+        int maxSize = ConfigKeys.getAutoDropQueueMaxSize();
+        if (queue.size() >= maxSize) {
+            queue.pollLast();
+        }
+        queue.addFirst(new QueuedDrop(templateName, waveCount, location, System.currentTimeMillis()));
+    }
+
+    public boolean removeFromQueue(String templateName) {
+        return queue.removeIf(q -> q.templateName().equalsIgnoreCase(templateName));
+    }
+
+    public List<QueuedDrop> getQueuedDrops() {
+        return List.copyOf(queue);
+    }
+
+    public int getQueueSize() {
+        return queue.size();
+    }
+
+    public int getQueueMaxSize() {
+        return ConfigKeys.getAutoDropQueueMaxSize();
     }
 
     public boolean isRunning() {
@@ -100,85 +197,115 @@ public class AutoDropScheduler {
         int radius = ConfigKeys.getAutoDropRandomRadius();
         Location spawnLoc = getRandomLocation(world, radius);
 
-        // Announce
-        if (ConfigKeys.isAnnouncementEnabled() && ConfigKeys.isAutoDropAnnounce()) {
-            int delay = ConfigKeys.getAutoDropAnnounceDelay();
-            boolean actionbar = ConfigKeys.isAutoDropAnnounceActionbar();
-            int coordDelay = ConfigKeys.getAutoDropCoordRevealDelay();
+        // Try chain trigger — chain drops bypass queue
+        if (chainManager.tryTriggerChain(world, spawnLoc)) {
+            return;
+        }
 
-            if (actionbar) {
-                // Actionbar: show immediately, no coords
-                Component actionbarMsg = Component.text("§e§lSupply Drop §b" + pkg.getDisplayName() + " §eincoming!");
-                for (Player p : world.getPlayers()) {
-                    p.sendActionBar(actionbarMsg);
-                }
-            } else {
-                // Chat announcement via NotificationManager
-                if (coordDelay > 0) {
-                    // Announce without coords first
-                    String noLocMsg = "&bSupply drop &e" + pkg.getDisplayName() + " &bincoming! Coordinates revealed in &e" + formatTime(coordDelay) + "&b!";
-                    NotificationManager.notify(worldName, noLocMsg);
-                    // Reveal coords after delay
-                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                        String coordMsg = "&bSupply drop &e" + pkg.getDisplayName() + " &bat &e" +
-                                spawnLoc.getBlockX() + ", " + spawnLoc.getBlockZ() + "&b!";
-                        NotificationManager.notify(worldName, coordMsg);
-                    }, coordDelay);
-                } else {
-                    // Announce with coords immediately
-                    String msg = "&bSupply drop &e" + pkg.getDisplayName() + " &bincoming at &e" +
-                            spawnLoc.getBlockX() + ", " + spawnLoc.getBlockZ() + "&b!";
-                    NotificationManager.notify(worldName, msg);
-                }
-            }
+        int announceDelay = ConfigKeys.isAnnouncementEnabled() && ConfigKeys.isAutoDropAnnounce()
+                ? ConfigKeys.getAutoDropAnnounceDelay() : 0;
+
+        // Schedule warning countdown
+        if (ConfigKeys.isAutoDropWarningEnabled()) {
+            dropWarning.schedule(world, pkg.getDisplayName(), 1, announceDelay);
+        }
+
+        // Announce via AnnouncementManager
+        if (announceDelay > 0) {
+            String seasonPrefix = getActiveSeasonPrefix();
+            AnnouncementManager.announce("normal", pkg.getDisplayName(), 1,
+                    seasonPrefix, spawnLoc, world, worldName);
 
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 executeDropAtLocation(pkg, world, spawnLoc);
-            }, delay);
+            }, announceDelay);
         } else {
             executeDropAtLocation(pkg, world, spawnLoc);
         }
     }
 
     private void executeDropAtLocation(Package pkg, World world, Location spawnLoc) {
-        int waveCount = ConfigKeys.getAutoDropWaveCount();
+        int onlineCount = world.getPlayers().size();
+        int waveCount = ConfigKeys.getAutoDropWaveCountForPlayers(onlineCount);
+        int playerBonusRolls = ConfigKeys.getAutoDropBonusRollsForPlayers(onlineCount);
 
         try {
+            int crateCount;
             if (waveCount > 1) {
-                DropController.dropWave(pkg, world, spawnLoc, waveCount);
+                java.util.List<Crate> crates = DropController.dropWave(pkg, world, spawnLoc, waveCount, playerBonusRolls);
+                crateCount = crates != null ? crates.size() : 0;
                 AirdropLogger.info("Wave drop: " + waveCount + " crates at " + spawnLoc.getBlockX() + ", " + spawnLoc.getBlockZ());
             } else {
-                DropController.dropAtLocation(pkg, world, spawnLoc);
+                crateCount = DropController.dropAtLocation(pkg, world, spawnLoc, playerBonusRolls);
             }
             DropController.markDropCompleted();
+
+            // Record stats
+            AutoDropStats stats = AutoDropStats.get();
+            if (stats != null) {
+                stats.incrementDrop();
+                stats.incrementCrates(crateCount);
+                stats.incrementTemplate(pkg.getName());
+                stats.setLastDropTime(System.currentTimeMillis());
+            }
+
+            incrementEscalation();
         } catch (SkyNotClearException e) {
-            AirdropLogger.warning("Auto-drop failed: sky not clear at target location.");
+            if (ConfigKeys.isAutoDropQueueEnabled()) {
+                addToQueue(pkg.getName(), waveCount, spawnLoc);
+                AirdropLogger.info("Sky not clear, queued drop: " + pkg.getName() + " (queue: " + queue.size() + ")");
+            } else {
+                AirdropLogger.warning("Auto-drop failed: sky not clear at target location.");
+            }
         }
     }
 
+    private void incrementEscalation() {
+        if (!ConfigKeys.isAutoDropEscalationEnabled()) return;
+        Config config = SupplyDrop.getConfiguration();
+        if (config == null) return;
+        int level = config.getEscalationLevel();
+        config.setEscalationLevel(level + 1);
+    }
+
     private Package resolvePackage() {
-        List<TemplateWeight> templates = ConfigKeys.getAutoDropTemplates();
+        Season activeSeason = plugin.getSeasonManager() != null ? plugin.getSeasonManager().getActiveSeason() : null;
+        List<TemplateWeight> templates;
+
+        if (activeSeason != null && !activeSeason.templates().isEmpty()) {
+            templates = activeSeason.templates();
+            AirdropLogger.debug("Using season '" + activeSeason.name() + "' templates");
+        } else {
+            templates = ConfigKeys.getAutoDropTemplates();
+        }
+
         if (templates.isEmpty()) {
             AirdropLogger.warning("No auto-drop templates configured.");
             return null;
         }
 
-        // Weighted random selection
-        int totalWeight = templates.stream().mapToInt(TemplateWeight::weight).sum();
-        if (totalWeight <= 0) {
-            AirdropLogger.warning("All auto-drop template weights are zero.");
-            return null;
-        }
+        String selectedName;
 
-        int roll = random.nextInt(totalWeight);
-        int cumulative = 0;
-        String selectedName = templates.get(0).name();
+        if (ConfigKeys.isAutoDropRotationEnabled()) {
+            selectedName = resolveWithRotation(templates);
+        } else {
+            // Weighted random selection
+            int totalWeight = templates.stream().mapToInt(TemplateWeight::weight).sum();
+            if (totalWeight <= 0) {
+                AirdropLogger.warning("All auto-drop template weights are zero.");
+                return null;
+            }
 
-        for (TemplateWeight tw : templates) {
-            cumulative += tw.weight();
-            if (roll < cumulative) {
-                selectedName = tw.name();
-                break;
+            int roll = random.nextInt(totalWeight);
+            int cumulative = 0;
+            selectedName = templates.get(0).name();
+
+            for (TemplateWeight tw : templates) {
+                cumulative += tw.weight();
+                if (roll < cumulative) {
+                    selectedName = tw.name();
+                    break;
+                }
             }
         }
 
@@ -187,6 +314,28 @@ public class AutoDropScheduler {
             AirdropLogger.warning("Auto-drop template '" + selectedName + "' not found.");
         }
         return pkg;
+    }
+
+    private String resolveWithRotation(List<TemplateWeight> templates) {
+        Config config = SupplyDrop.getConfiguration();
+        if (config == null) return templates.get(0).name();
+
+        int index = config.getRotationIndex();
+        if (index < 0 || index >= templates.size()) {
+            index = 0;
+        }
+
+        String selected = templates.get(index).name();
+
+        int nextIndex = (index + 1) % templates.size();
+        config.setRotationIndex(nextIndex);
+
+        return selected;
+    }
+
+    public String getActiveSeasonPrefix() {
+        Season activeSeason = plugin.getSeasonManager() != null ? plugin.getSeasonManager().getActiveSeason() : null;
+        return activeSeason != null ? activeSeason.announcePrefix() : "";
     }
 
     private Location getRandomLocation(World world, int radius) {

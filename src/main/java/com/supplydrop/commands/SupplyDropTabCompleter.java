@@ -1,5 +1,6 @@
 package com.supplydrop.commands;
 
+import com.supplydrop.AutoDropScheduler;
 import com.supplydrop.SupplyDrop;
 import com.supplydrop.Crate;
 import com.supplydrop.config.ConfigKeys;
@@ -20,7 +21,7 @@ import java.util.Set;
 
 public class SupplyDropTabCompleter implements TabCompleter {
 
-    private static final List<String> ADMIN_SUB_COMMANDS = List.of("call", "spawn", "active", "db", "preview", "history", "package", "templates", "reload", "version", "pause", "resume", "auto", "subscribe", "unsubscribe", "toggle", "delete", "config");
+    private static final List<String> ADMIN_SUB_COMMANDS = List.of("call", "spawn", "active", "db", "preview", "history", "package", "templates", "reload", "version", "pause", "resume", "auto", "chain", "rotation", "escalation", "stats", "schedule", "queue", "subscribe", "unsubscribe", "toggle", "delete", "config");
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
@@ -81,6 +82,55 @@ public class SupplyDropTabCompleter implements TabCompleter {
             if (args.length == 2 && args[0].equalsIgnoreCase("toggle")) {
                 if (PermissionsHelper.isAdmin(sender)) {
                     return List.of("hologram", "announce", "notify");
+                }
+            }
+
+            // /supplydrop rotation reset
+            if (args.length == 2 && args[0].equalsIgnoreCase("rotation")) {
+                if (PermissionsHelper.isAdmin(sender)) {
+                    return List.of("reset");
+                }
+            }
+
+            // /supplydrop escalation [reset]
+            if (args.length == 2 && args[0].equalsIgnoreCase("escalation")) {
+                if (PermissionsHelper.isAdmin(sender)) {
+                    return List.of("reset");
+                }
+            }
+
+            // /supplydrop stats [reset]
+            if (args.length == 2 && args[0].equalsIgnoreCase("stats")) {
+                if (PermissionsHelper.isAdmin(sender)) {
+                    return List.of("reset");
+                }
+            }
+
+            // /supplydrop schedule [add|remove]
+            if (args.length >= 2 && args[0].equalsIgnoreCase("schedule")) {
+                if (PermissionsHelper.isAdmin(sender)) {
+                    if (args.length == 2) {
+                        return List.of("add", "remove");
+                    }
+                    if (args.length == 3) {
+                        return List.of("HH:mm");
+                    }
+                }
+            }
+
+            // /supplydrop queue [remove <template>]
+            if (args.length >= 2 && args[0].equalsIgnoreCase("queue")) {
+                if (PermissionsHelper.isAdmin(sender)) {
+                    if (args.length == 2) {
+                        return List.of("remove");
+                    }
+                    if (args.length == 3 && args[1].equalsIgnoreCase("remove")) {
+                        if (plugin != null && plugin.getAutoDropScheduler() != null) {
+                            return plugin.getAutoDropScheduler().getQueuedDrops().stream()
+                                    .map(AutoDropScheduler.QueuedDrop::templateName)
+                                    .toList();
+                        }
+                    }
                 }
             }
 

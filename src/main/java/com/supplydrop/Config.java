@@ -55,4 +55,22 @@ public class Config {
             }
         }
     }
+
+    public int getRotationIndex() {
+        return getConfig().getInt("auto-drop.rotation.index", 0);
+    }
+
+    public void setRotationIndex(int index) {
+        getConfig().set("auto-drop.rotation.index", index);
+        saveConfig();
+    }
+
+    public int getEscalationLevel() {
+        return getConfig().getInt("auto-drop.escalation.level", 0);
+    }
+
+    public void setEscalationLevel(int level) {
+        getConfig().set("auto-drop.escalation.level", level);
+        saveConfig();
+    }
 }

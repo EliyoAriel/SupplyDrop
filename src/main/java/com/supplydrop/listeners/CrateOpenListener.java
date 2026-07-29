@@ -12,7 +12,9 @@ import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.scheduler.BukkitTask;
 
+import com.supplydrop.Config;
 import com.supplydrop.SupplyDrop;
+import com.supplydrop.config.ConfigKeys;
 import com.supplydrop.controllers.DropController;
 import com.supplydrop.Crate;
 import com.supplydrop.helpers.AirdropLogger;
@@ -61,6 +63,15 @@ public class CrateOpenListener implements Listener {
 
         // Reset loot scaling counter
         DropController.markLootCollected();
+
+        // Reset escalation on crate open
+        if (ConfigKeys.isAutoDropEscalationEnabled() && ConfigKeys.isAutoDropEscalationResetOnOpen()) {
+            Config config = SupplyDrop.getConfiguration();
+            if (config != null && config.getEscalationLevel() > 0) {
+                config.setEscalationLevel(0);
+                AirdropLogger.debug("Escalation level reset to 0 (crate opened).");
+            }
+        }
 
         // Log event
         HistoryManager.logEvent(crate.isTrapCrate() ? "TRAP" : "OPEN",

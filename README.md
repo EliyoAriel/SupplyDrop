@@ -31,6 +31,16 @@ A Minecraft Paper plugin that drops randomized care packages from the sky as wor
 - Delete crates by short UUID, list number, or bulk `all`
 - Toggle commands for hologram, announcements, and notifications
 - Max active supplydrops limit
+- Player count scaling — auto-adjusts drop intensity based on online players
+- Drop queuing — queues drops when sky is not clear, polls and fires when clear
+- Seasonal events — overrides templates with seasonal loot during date ranges
+- Drop chains — sequential crates after a single auto-drop with configurable chance
+- Loot rotation — cycles through templates in order instead of weighted random
+- Escalating difficulty — trap chance increases with consecutive undropped drops
+- Scheduled drops — triggers auto-drops at specific real-world times (HH:mm)
+- Drop warnings — configurable actionbar countdown before drops
+- Announcement tiers — configurable multi-tier announcements (normal, wave, chain)
+- Auto-drop statistics — tracks drops, crates, traps, teams, chains per template
 
 ## Permissions
 
@@ -59,6 +69,12 @@ A Minecraft Paper plugin that drops randomized care packages from the sky as wor
 | `/supplydrop version` | Show plugin version |
 | `/supplydrop pause` | Pause the auto-drop scheduler |
 | `/supplydrop resume` | Resume the auto-drop scheduler |
+| `/supplydrop chain` | Trigger a manual chain drop |
+| `/supplydrop rotation [reset]` | Show or reset the rotation index |
+| `/supplydrop escalation [status\|reset]` | Show or reset escalation level |
+| `/supplydrop queue [list\|remove]` | View or remove queued drops |
+| `/supplydrop stats [reset]` | View or reset auto-drop statistics |
+| `/supplydrop schedule [add\|remove] <HH:mm>` | Manage scheduled drop times |
 
 ### Toggle Commands
 
@@ -138,6 +154,12 @@ The `/supplydrop spawn` command accepts optional conditions:
 | `/supplydrop auto trap-chance <percent>` | Trap chance |
 | `/supplydrop auto trap-mobs <type1> <type2> ...` | Set trap mob types |
 | `/supplydrop auto loot-scaling <true\|false>` | Toggle loot scaling |
+| `/supplydrop auto fall-duration <seconds>` | Set auto-drop fall duration |
+| `/supplydrop auto scaling <true\|false>` | Toggle player count scaling |
+| `/supplydrop auto queue <enable\|disable>` | Toggle drop queuing |
+| `/supplydrop auto warning <true\|false>` | Toggle drop warnings |
+| `/supplydrop auto rotation <true\|false>` | Toggle loot rotation |
+| `/supplydrop auto escalating <true\|false>` | Toggle escalating difficulty |
 
 ## Configuration
 
@@ -244,6 +266,19 @@ announce:
   enabled: true
   actionbar: false
   coord-reveal-delay: 0
+  # tiers:
+  #   normal:
+  #     prefix: "&b&lSupply Drop"
+  #     message: "&e{template} &bincoming!"
+  #     actionbar: false
+  #   wave:
+  #     prefix: "&6&l⚔ WAVE"
+  #     message: "&e{count}x {template} &bincoming!"
+  #     actionbar: false
+  #   chain:
+  #     prefix: "&c&l⛓ CHAIN"
+  #     message: "&e{template} &bchain drop starting!"
+  #     actionbar: true
 
 # Auto-drop settings
 auto-drop:
@@ -278,6 +313,48 @@ auto-drop:
     - CREEPER
   loot-scaling: false
   loot-scaling-max: 20
+  scaling:
+    enabled: false
+    min-players: 1
+    max-players: 20
+    wave-min: 1
+    wave-max: 5
+    bonus-rolls-per-player: 0
+  queue:
+    enabled: false
+    poll-interval: 100
+    max-queue-size: 5
+  rotation:
+    enabled: false
+  escalation:
+    enabled: false
+    increment: 5
+    cap: 50
+    reset-on-open: true
+  chain:
+    enabled: false
+    chance: 0
+    count: 3
+    interval: 1200
+    decrease-interval: true
+  scheduled:
+    enabled: false
+    times: []
+  warning:
+    enabled: false
+    seconds-before:
+      - 60
+      - 30
+      - 10
+    message: "&e⚠ Supply drop in &c{seconds}s &e!"
+  # seasons:
+  #   halloween:
+  #     start: "10-15"
+  #     end: "11-01"
+  #     announce-prefix: "&6🎃"
+  #     templates:
+  #       spooky_loot:
+  #         weight: 100
 
 # Logging settings
 logging:
@@ -316,6 +393,7 @@ notification:
 | `{lock-progress}` | Lock phase visual progress bar |
 | `{lock-time}` | Lock phase remaining time |
 | `{state}` | Crate state label (Falling, LOCK, READY, etc.) |
+| `{escalation}` | Current escalation level |
 
 ### packages.yml
 
@@ -544,6 +622,91 @@ Multiple crates can drop simultaneously:
 - Each crate gets independent loot
 - Random spread around center location
 
+### Player Count Scaling
+
+Auto-adjusts drop intensity based on online players:
+- Configurable min/max player thresholds
+- Wave count scales between `wave-min` and `wave-max` based on player count
+- Optional bonus loot rolls per player for larger groups
+- Configuration: `auto-drop.scaling.*`
+
+### Drop Queuing
+
+When sky is not clear at the drop location, drops are queued instead of skipped:
+- Configurable queue size and poll interval
+- Queue fires drops when sky clears
+- View and manage queue with `/supplydrop queue`
+- Configuration: `auto-drop.queue.*`
+
+### Seasonal Events
+
+Override auto-drop templates during specific date ranges:
+- Configurable start/end dates (month-day format, wraps year-end)
+- Fully overrides the normal template pool while active
+- Custom announcement prefix for seasonal flavor
+- Configuration: `auto-drop.seasons`
+
+### Drop Chains
+
+A chance-based chain reaction after an auto-drop:
+- Configurable trigger chance
+- Sequential crates spawn with decreasing intervals
+- Visual chain prefix in announcements
+- Manual trigger with `/supplydrop chain`
+- Configuration: `auto-drop.chain.*`
+
+### Loot Rotation
+
+Cycles through templates in order instead of weighted random:
+- Templates are selected sequentially from the configured list
+- Rotation index persists in config across restarts
+- Reset with `/supplydrop rotation reset`
+- Configuration: `auto-drop.rotation.enabled`
+
+### Escalating Difficulty
+
+Trap chance increases with consecutive unopened auto-drops:
+- Each auto-drop increments the escalation level
+- Trap chance = base chance + (level × increment), capped at `cap`
+- Escalation resets when any crate is opened (configurable)
+- Hologram placeholder `{escalation}` shows current level
+- View/reset with `/supplydrop escalation`
+- Configuration: `auto-drop.escalation.*`
+
+### Scheduled Drops
+
+Trigger auto-drops at specific real-world times:
+- Configure times as HH:mm entries in config
+- Add/remove times with `/supplydrop schedule add|remove <HH:mm>`
+- Uses 20-tick check cycle against system clock
+- Optional world override
+- Configuration: `auto-drop.scheduled.*`
+
+### Drop Warnings
+
+Configurable actionbar countdown before auto-drops:
+- Multiple countdown intervals (e.g., 60s, 30s, 10s)
+- Customizable message with `{seconds}`, `{template}`, `{count}` placeholders
+- Warnings cancel if scheduler is stopped
+- Configuration: `auto-drop.warning.*`
+
+### Announcement Tiers
+
+Multi-tier announcement system with per-tier configuration:
+- Each tier has its own prefix, message template, actionbar toggle, and coord reveal delay
+- Built-in tiers: `normal`, `wave`, `chain`
+- Placeholders: `{template}`, `{count}`, `{coords}`, `{world}`, `{season-prefix}`
+- Configuration: `announce.tiers`
+
+### Auto-Drop Statistics
+
+Tracks auto-drop performance across server runs:
+- Total drops, total crates, traps, teams, chains
+- Per-template usage counts
+- Last drop timestamp
+- Permanently stored in `stats.yml`
+- View/reset with `/supplydrop stats [reset]`
+
 ### Auto-Drop Scheduler
 
 - Fixed or random intervals
@@ -552,6 +715,14 @@ Multiple crates can drop simultaneously:
 - World-specific drops with configurable radius
 - Separate team-crate and trap settings from global crate settings
 - Per-template and per-command fall duration overrides
+- Player count scaling for wave count and bonus rolls
+- Drop queuing with configurable poll interval
+- Seasonal template overrides with date-based activation
+- Drop chain chance with sequential interval decrease
+- Loot rotation with persistent index
+- Escalating difficulty with hologram placeholder
+- Scheduled real-world time triggers
+- Configurable actionbar countdown warnings
 
 ## Building
 

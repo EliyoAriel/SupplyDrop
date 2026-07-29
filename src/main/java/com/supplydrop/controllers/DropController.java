@@ -1,10 +1,13 @@
 package com.supplydrop.controllers;
 
 import com.supplydrop.Crate;
+import com.supplydrop.Config;
+import com.supplydrop.SupplyDrop;
 import com.supplydrop.config.ConfigKeys;
 import com.supplydrop.config.ConfigKeys.TemplateWeight;
 import com.supplydrop.config.DropOptions;
 import com.supplydrop.exceptions.SkyNotClearException;
+import com.supplydrop.stats.AutoDropStats;
 import com.supplydrop.helpers.AirdropLogger;
 import com.supplydrop.helpers.ChatHandler;
 import com.supplydrop.helpers.CrateManager;
@@ -86,7 +89,14 @@ public class DropController {
      * Drop at a specific location (for auto-drops).
      * Resolves auto-drop.* overrides, falling back to crate.* for null fields.
      */
-    public static void dropAtLocation(Package pkg, World world, Location loc) throws SkyNotClearException {
+    public static int dropAtLocation(Package pkg, World world, Location loc) throws SkyNotClearException {
+        return dropAtLocation(pkg, world, loc, 0);
+    }
+
+    /**
+     * Drop at a specific location with player count bonus rolls.
+     */
+    public static int dropAtLocation(Package pkg, World world, Location loc, int playerBonusRolls) throws SkyNotClearException {
         int fallDuration = pkg.getFallDuration() > 0 ? pkg.getFallDuration() : ConfigKeys.getAutoDropFallDuration();
 
         // Resolve auto-drop overrides — null means use crate.* global
@@ -106,17 +116,35 @@ public class DropController {
 
         Location spawnLocation = getSpawnLocation(world, loc, options);
 
-        int bonusRolls = calculateBonusRolls();
+        int bonusRolls = calculateBonusRolls() + playerBonusRolls;
         List<ItemStack> loot = rollLoot(pkg.getLootTable(), bonusRolls);
-        int trapChance = autoTrapChance != null ? autoTrapChance : ConfigKeys.getCrateTrapChance();
+        int baseChance = autoTrapChance != null ? autoTrapChance : ConfigKeys.getCrateTrapChance();
+        int trapChance = getEscalatedTrapChance(baseChance);
         boolean isTrap = rollTrapChance(trapChance);
-        dropCrateAtLocation(spawnLocation, world, loot, options, pkg.getDisplayName(), isTrap);
+
+        Crate crate = dropCrateAtLocation(spawnLocation, world, loot, options, pkg.getDisplayName(), isTrap);
+        if (crate != null) {
+            AutoDropStats stats = AutoDropStats.get();
+            if (stats != null) {
+                if (isTrap) stats.incrementTrap();
+                if (crate.isTeamCrate()) stats.incrementTeam();
+            }
+            return 1;
+        }
+        return 0;
     }
 
     /**
      * Drop multiple crates at a location (wave drops).
      */
     public static List<Crate> dropWave(Package pkg, World world, Location centerLoc, int count) throws SkyNotClearException {
+        return dropWave(pkg, world, centerLoc, count, 0);
+    }
+
+    /**
+     * Drop multiple crates at a location with player count bonus rolls.
+     */
+    public static List<Crate> dropWave(Package pkg, World world, Location centerLoc, int count, int playerBonusRolls) throws SkyNotClearException {
         List<Crate> crates = new ArrayList<>();
         int fallDuration = pkg.getFallDuration() > 0 ? pkg.getFallDuration() : ConfigKeys.getAutoDropFallDuration();
 
@@ -135,6 +163,7 @@ public class DropController {
                 .withTeamCrateRange(autoTeamRange);
 
         int radius = ConfigKeys.getAutoDropRandomRadius();
+        AutoDropStats stats = AutoDropStats.get();
 
         for (int i = 0; i < count; i++) {
             Location offset = centerLoc.clone().add(
@@ -144,12 +173,19 @@ public class DropController {
 
             try {
                 Location spawnLocation = getSpawnLocation(world, offset, options);
-                int bonusRolls = calculateBonusRolls();
+                int bonusRolls = calculateBonusRolls() + playerBonusRolls;
                 List<ItemStack> loot = rollLoot(pkg.getLootTable(), bonusRolls);
-                int trapChance = autoTrapChance != null ? autoTrapChance : ConfigKeys.getCrateTrapChance();
+                int baseChance = autoTrapChance != null ? autoTrapChance : ConfigKeys.getCrateTrapChance();
+                int trapChance = getEscalatedTrapChance(baseChance);
                 boolean isTrap = rollTrapChance(trapChance);
                 Crate crate = dropCrateAtLocation(spawnLocation, world, loot, options, pkg.getDisplayName(), isTrap);
-                if (crate != null) crates.add(crate);
+                if (crate != null) {
+                    crates.add(crate);
+                    if (stats != null) {
+                        if (isTrap) stats.incrementTrap();
+                        if (crate.isTeamCrate()) stats.incrementTeam();
+                    }
+                }
             } catch (SkyNotClearException e) {
                 // Skip this crate if sky not clear
             }
@@ -188,13 +224,23 @@ public class DropController {
         return random.nextInt(100) < chance;
     }
 
+    private static int getEscalatedTrapChance(int baseChance) {
+        if (!ConfigKeys.isAutoDropEscalationEnabled()) return baseChance;
+        Config config = SupplyDrop.getConfiguration();
+        if (config == null) return baseChance;
+        int level = config.getEscalationLevel();
+        int increment = ConfigKeys.getAutoDropEscalationIncrement();
+        int cap = ConfigKeys.getAutoDropEscalationCap();
+        return Math.min(baseChance + level * increment, cap);
+    }
+
     private static List<ItemStack> rollLoot(LootTable table, int bonusRolls) {
         int min = ConfigKeys.getMinRolls();
         int max = ConfigKeys.getMaxRolls() + bonusRolls;
         return table.rollMultiple(min, max);
     }
 
-    private static Location getSpawnLocation(World world, Location loc, DropOptions options) throws SkyNotClearException {
+    public static Location getSpawnLocation(World world, Location loc, DropOptions options) throws SkyNotClearException {
         Location highestLocation = world.getHighestBlockAt(loc.getBlockX(), loc.getBlockZ()).getLocation()
                 .add(HALF_BLOCK, 0, HALF_BLOCK);
 

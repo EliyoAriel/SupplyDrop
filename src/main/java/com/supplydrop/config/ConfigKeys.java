@@ -73,6 +73,31 @@ public final class ConfigKeys {
     public static final String AUTO_DROP_TRAP_MOBS = "auto-drop.trap-mobs";
     public static final String AUTO_DROP_LOOT_SCALING = "auto-drop.loot-scaling";
     public static final String AUTO_DROP_LOOT_SCALING_MAX = "auto-drop.loot-scaling-max";
+    public static final String AUTO_DROP_SCALING_ENABLED = "auto-drop.scaling.enabled";
+    public static final String AUTO_DROP_SCALING_MIN_PLAYERS = "auto-drop.scaling.min-players";
+    public static final String AUTO_DROP_SCALING_MAX_PLAYERS = "auto-drop.scaling.max-players";
+    public static final String AUTO_DROP_SCALING_WAVE_MIN = "auto-drop.scaling.wave-min";
+    public static final String AUTO_DROP_SCALING_WAVE_MAX = "auto-drop.scaling.wave-max";
+    public static final String AUTO_DROP_SCALING_BONUS_ROLLS_PER_PLAYER = "auto-drop.scaling.bonus-rolls-per-player";
+    public static final String AUTO_DROP_QUEUE_ENABLED = "auto-drop.queue.enabled";
+    public static final String AUTO_DROP_QUEUE_POLL_INTERVAL = "auto-drop.queue.poll-interval";
+    public static final String AUTO_DROP_QUEUE_MAX_SIZE = "auto-drop.queue.max-queue-size";
+    public static final String AUTO_DROP_CHAIN_ENABLED = "auto-drop.chain.enabled";
+    public static final String AUTO_DROP_CHAIN_CHANCE = "auto-drop.chain.chance";
+    public static final String AUTO_DROP_CHAIN_COUNT = "auto-drop.chain.count";
+    public static final String AUTO_DROP_CHAIN_INTERVAL = "auto-drop.chain.interval";
+    public static final String AUTO_DROP_CHAIN_DECREASE_INTERVAL = "auto-drop.chain.decrease-interval";
+    public static final String AUTO_DROP_ROTATION_ENABLED = "auto-drop.rotation.enabled";
+    public static final String AUTO_DROP_ESCALATION_ENABLED = "auto-drop.escalation.enabled";
+    public static final String AUTO_DROP_ESCALATION_INCREMENT = "auto-drop.escalation.increment";
+    public static final String AUTO_DROP_ESCALATION_CAP = "auto-drop.escalation.cap";
+    public static final String AUTO_DROP_ESCALATION_RESET_ON_OPEN = "auto-drop.escalation.reset-on-open";
+    public static final String AUTO_DROP_SCHEDULED_ENABLED = "auto-drop.scheduled.enabled";
+    public static final String AUTO_DROP_SCHEDULED_TIMES = "auto-drop.scheduled.times";
+    public static final String AUTO_DROP_SCHEDULED_WORLD_OVERRIDE = "auto-drop.scheduled.world-override";
+    public static final String AUTO_DROP_WARNING_ENABLED = "auto-drop.warning.enabled";
+    public static final String AUTO_DROP_WARNING_SECONDS_BEFORE = "auto-drop.warning.seconds-before";
+    public static final String AUTO_DROP_WARNING_MESSAGE = "auto-drop.warning.message";
 
     public static final String NOTIFICATION_DEFAULT_SUBSCRIBE = "notification.default-subscribe";
     public static final String ANNOUNCE_ENABLED = "announce.enabled";
@@ -295,6 +320,152 @@ public final class ConfigKeys {
 
     public static int getAutoDropLootScalingMax() {
         return Math.max(1, getConfig().getInt(AUTO_DROP_LOOT_SCALING_MAX, 20));
+    }
+
+    // Player count scaling
+    public static boolean isAutoDropScalingEnabled() {
+        return getConfig().getBoolean(AUTO_DROP_SCALING_ENABLED, false);
+    }
+
+    public static int getAutoDropScalingMinPlayers() {
+        return Math.max(1, getConfig().getInt(AUTO_DROP_SCALING_MIN_PLAYERS, 1));
+    }
+
+    public static int getAutoDropScalingMaxPlayers() {
+        return Math.max(getAutoDropScalingMinPlayers(), getConfig().getInt(AUTO_DROP_SCALING_MAX_PLAYERS, 20));
+    }
+
+    public static int getAutoDropScalingWaveMin() {
+        return Math.max(1, getConfig().getInt(AUTO_DROP_SCALING_WAVE_MIN, 1));
+    }
+
+    public static int getAutoDropScalingWaveMax() {
+        return Math.max(getAutoDropScalingWaveMin(), getConfig().getInt(AUTO_DROP_SCALING_WAVE_MAX, 5));
+    }
+
+    public static int getAutoDropScalingBonusRollsPerPlayer() {
+        return Math.max(0, getConfig().getInt(AUTO_DROP_SCALING_BONUS_ROLLS_PER_PLAYER, 0));
+    }
+
+    public static int getAutoDropWaveCountForPlayers(int onlineCount) {
+        if (!isAutoDropScalingEnabled()) {
+            return getAutoDropWaveCount();
+        }
+        int min = getAutoDropScalingMinPlayers();
+        int max = getAutoDropScalingMaxPlayers();
+        int waveMin = getAutoDropScalingWaveMin();
+        int waveMax = getAutoDropScalingWaveMax();
+
+        if (onlineCount <= min) return waveMin;
+        if (onlineCount >= max) return waveMax;
+
+        double t = (double) (onlineCount - min) / (max - min);
+        int waveCount = (int) Math.round(waveMin + t * (waveMax - waveMin));
+        return Math.max(waveMin, Math.min(waveMax, waveCount));
+    }
+
+    public static int getAutoDropBonusRollsForPlayers(int onlineCount) {
+        if (!isAutoDropScalingEnabled()) return 0;
+        int min = getAutoDropScalingMinPlayers();
+        int bonusPerPlayer = getAutoDropScalingBonusRollsPerPlayer();
+        if (bonusPerPlayer <= 0) return 0;
+        return Math.max(0, (onlineCount - min) * bonusPerPlayer);
+    }
+
+    // Drop queuing
+    public static boolean isAutoDropQueueEnabled() {
+        return getConfig().getBoolean(AUTO_DROP_QUEUE_ENABLED, false);
+    }
+
+    public static int getAutoDropQueuePollInterval() {
+        return Math.max(20, getConfig().getInt(AUTO_DROP_QUEUE_POLL_INTERVAL, 100));
+    }
+
+    public static int getAutoDropQueueMaxSize() {
+        return Math.max(1, getConfig().getInt(AUTO_DROP_QUEUE_MAX_SIZE, 5));
+    }
+
+    // Drop chains
+    public static boolean isAutoDropChainEnabled() {
+        return getConfig().getBoolean(AUTO_DROP_CHAIN_ENABLED, false);
+    }
+
+    public static int getAutoDropChainChance() {
+        return Math.max(0, Math.min(100, getConfig().getInt(AUTO_DROP_CHAIN_CHANCE, 0)));
+    }
+
+    public static int getAutoDropChainCount() {
+        return Math.max(1, getConfig().getInt(AUTO_DROP_CHAIN_COUNT, 3));
+    }
+
+    public static int getAutoDropChainInterval() {
+        return Math.max(100, getConfig().getInt(AUTO_DROP_CHAIN_INTERVAL, 1200));
+    }
+
+    public static boolean isAutoDropChainDecreaseInterval() {
+        return getConfig().getBoolean(AUTO_DROP_CHAIN_DECREASE_INTERVAL, true);
+    }
+
+    // Loot rotation
+    public static boolean isAutoDropRotationEnabled() {
+        return getConfig().getBoolean(AUTO_DROP_ROTATION_ENABLED, false);
+    }
+
+    // Escalating difficulty
+    public static boolean isAutoDropEscalationEnabled() {
+        return getConfig().getBoolean(AUTO_DROP_ESCALATION_ENABLED, false);
+    }
+
+    public static int getAutoDropEscalationIncrement() {
+        return Math.max(0, getConfig().getInt(AUTO_DROP_ESCALATION_INCREMENT, 5));
+    }
+
+    public static int getAutoDropEscalationCap() {
+        return Math.max(0, Math.min(100, getConfig().getInt(AUTO_DROP_ESCALATION_CAP, 50)));
+    }
+
+    public static boolean isAutoDropEscalationResetOnOpen() {
+        return getConfig().getBoolean(AUTO_DROP_ESCALATION_RESET_ON_OPEN, true);
+    }
+
+    // Scheduled drops
+    public static boolean isAutoDropScheduledEnabled() {
+        return getConfig().getBoolean(AUTO_DROP_SCHEDULED_ENABLED, false);
+    }
+
+    public static List<String> getAutoDropScheduledTimes() {
+        return getConfig().getStringList(AUTO_DROP_SCHEDULED_TIMES);
+    }
+
+    public static String getAutoDropScheduledWorldOverride() {
+        String override = getConfig().getString(AUTO_DROP_SCHEDULED_WORLD_OVERRIDE);
+        return (override != null && !override.isEmpty()) ? override : null;
+    }
+
+    // Drop warnings
+    public static boolean isAutoDropWarningEnabled() {
+        return getConfig().getBoolean(AUTO_DROP_WARNING_ENABLED, false);
+    }
+
+    public static List<Integer> getAutoDropWarningSecondsBefore() {
+        List<Integer> result = new ArrayList<>();
+        List<String> raw = getConfig().getStringList(AUTO_DROP_WARNING_SECONDS_BEFORE);
+        if (raw.isEmpty()) {
+            result.add(60);
+            result.add(30);
+            result.add(10);
+        } else {
+            for (String s : raw) {
+                try {
+                    result.add(Integer.parseInt(s));
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        return result;
+    }
+
+    public static String getAutoDropWarningMessage() {
+        return getConfig().getString(AUTO_DROP_WARNING_MESSAGE, "&e⚠ Supply drop in &c{seconds}s &e!");
     }
 
     // Crate settings

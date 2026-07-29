@@ -4,6 +4,7 @@ import com.supplydrop.Config;
 import com.supplydrop.SupplyDrop;
 import com.supplydrop.config.ConfigKeys;
 import com.supplydrop.config.ConfigKeys.TemplateWeight;
+import com.supplydrop.AutoDropScheduler;
 import com.supplydrop.controllers.DropController;
 import com.supplydrop.exceptions.SkyNotClearException;
 import com.supplydrop.gui.PreviewGui;
@@ -30,6 +31,7 @@ import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class SupplyDropCommand implements CommandExecutor {
 
@@ -52,6 +54,12 @@ public class SupplyDropCommand implements CommandExecutor {
                 case "pause" -> handlePauseCommand(sender, true);
                 case "resume" -> handlePauseCommand(sender, false);
                 case "auto" -> handleAutoCommand(sender, args);
+                case "chain" -> handleChainCommand(sender);
+                case "rotation" -> handleRotationCommand(sender, args);
+                case "escalation" -> handleEscalationCommand(sender, args);
+                case "stats" -> handleStatsCommand(sender, args);
+                case "schedule" -> handleScheduleCommand(sender, args);
+                case "queue" -> handleQueueCommand(sender, args);
                 case "subscribe" -> handleSubscribeCommand(sender, true);
                 case "unsubscribe" -> handleSubscribeCommand(sender, false);
                 case "toggle" -> handleToggleCommand(sender, args);
@@ -580,6 +588,9 @@ public class SupplyDropCommand implements CommandExecutor {
         }
 
         config.reloadConfig();
+        if (plugin.getSeasonManager() != null) {
+            plugin.getSeasonManager().load(config);
+        }
         if (!PackageManager.reload()) {
             ChatHandler.sendError(sender, "Reload failed because packages configuration is unavailable.");
             return;
@@ -769,6 +780,261 @@ public class SupplyDropCommand implements CommandExecutor {
 
         ConfigMainMenu gui = new ConfigMainMenu();
         gui.openInventory(player);
+    }
+
+    // ─── /supplydrop queue ────────────────────────────────────────────
+
+    private void handleQueueCommand(CommandSender sender, String[] args) {
+        if (!PermissionsHelper.isAdmin(sender)) {
+            ChatHandler.sendError(sender, "You must have &bsupplydrop.admin &cpermission to do this.");
+            return;
+        }
+
+        SupplyDrop plugin = SupplyDrop.getPluginInstance();
+        AutoDropScheduler scheduler = plugin != null ? plugin.getAutoDropScheduler() : null;
+        if (scheduler == null) {
+            ChatHandler.sendError(sender, "Auto-drop scheduler is not running.");
+            return;
+        }
+
+        if (args.length < 2) {
+            List<AutoDropScheduler.QueuedDrop> drops = scheduler.getQueuedDrops();
+            if (drops.isEmpty()) {
+                ChatHandler.send(sender, "&7Queue is empty. (&e" + scheduler.getQueueSize() + "&7/&e" + scheduler.getQueueMaxSize() + "&7)");
+            } else {
+                ChatHandler.send(sender, "&9━━━━━━━━━━━━━━━━━━━━━━━━");
+                ChatHandler.send(sender, "&f  &b&lQueued Drops &7(" + drops.size() + "/" + scheduler.getQueueMaxSize() + ")");
+                ChatHandler.send(sender, "&9━━━━━━━━━━━━━━━━━━━━━━━━");
+                for (AutoDropScheduler.QueuedDrop qd : drops) {
+                    long elapsed = (System.currentTimeMillis() - qd.queuedAt()) / 1000;
+                    ChatHandler.send(sender, " &e" + qd.templateName() +
+                            (qd.waveCount() > 1 ? " &7(x" + qd.waveCount() + ")" : "") +
+                            " &8- queued " + elapsed + "s ago");
+                }
+                ChatHandler.send(sender, "&9━━━━━━━━━━━━━━━━━━━━━━━━");
+            }
+            ChatHandler.send(sender, "&7Usage: &e/supplydrop queue remove <template>");
+            return;
+        }
+
+        switch (args[1].toLowerCase()) {
+            case "remove" -> {
+                if (args.length < 3) {
+                    ChatHandler.sendError(sender, "Usage: /supplydrop queue remove <template>");
+                    return;
+                }
+                if (scheduler.removeFromQueue(args[2])) {
+                    ChatHandler.send(sender, "Removed &b" + args[2] + " &7from drop queue.");
+                } else {
+                    ChatHandler.send(sender, "&c" + args[2] + " &cnot found in queue.");
+                }
+            }
+            default -> ChatHandler.sendError(sender, "Usage: /supplydrop queue [remove <template>]");
+        }
+    }
+
+    // ─── /supplydrop chain ───────────────────────────────────────────
+
+    private void handleChainCommand(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            ChatHandler.sendError(sender, "Must be a player to use this command.");
+            return;
+        }
+        if (!PermissionsHelper.isAdmin(sender)) {
+            ChatHandler.sendError(sender, "You must have &bsupplydrop.admin &cpermission to do this.");
+            return;
+        }
+
+        SupplyDrop plugin = SupplyDrop.getPluginInstance();
+        if (plugin == null) return;
+
+        AutoDropScheduler scheduler = plugin.getAutoDropScheduler();
+        if (scheduler == null) {
+            ChatHandler.sendError(sender, "Auto-drop scheduler is not running.");
+            return;
+        }
+
+        scheduler.getChainManager().triggerManualChain(player);
+        ChatHandler.send(sender, "&c&l⛓ CHAIN &7- Manual chain drop triggered!");
+    }
+
+    // ─── /supplydrop rotation ────────────────────────────────────────
+
+    private void handleRotationCommand(CommandSender sender, String[] args) {
+        if (!PermissionsHelper.isAdmin(sender)) {
+            ChatHandler.sendError(sender, "You must have &bsupplydrop.admin &cpermission to do this.");
+            return;
+        }
+
+        Config config = SupplyDrop.getConfiguration();
+        if (config == null) {
+            ChatHandler.sendError(sender, "Config not available.");
+            return;
+        }
+
+        if (args.length < 2 || !args[1].equalsIgnoreCase("reset")) {
+            int index = config.getRotationIndex();
+            ChatHandler.send(sender, "&7Rotation index: &b" + index);
+            ChatHandler.send(sender, "&7Use &e/supplydrop rotation reset &7to reset to 0.");
+            return;
+        }
+
+        config.setRotationIndex(0);
+        ChatHandler.send(sender, "&aRotation index reset to 0.");
+    }
+
+    // ─── /supplydrop escalation ──────────────────────────────────────
+
+    private void handleEscalationCommand(CommandSender sender, String[] args) {
+        if (!PermissionsHelper.isAdmin(sender)) {
+            ChatHandler.sendError(sender, "You must have &bsupplydrop.admin &cpermission to do this.");
+            return;
+        }
+
+        Config config = SupplyDrop.getConfiguration();
+        if (config == null) {
+            ChatHandler.sendError(sender, "Config not available.");
+            return;
+        }
+
+        if (args.length >= 2 && args[1].equalsIgnoreCase("reset")) {
+            config.setEscalationLevel(0);
+            ChatHandler.send(sender, "&aEscalation level reset to 0.");
+            return;
+        }
+
+        int level = config.getEscalationLevel();
+        int baseChance = ConfigKeys.isAutoDropEscalationEnabled() ? ConfigKeys.getAutoDropTrapChance() : ConfigKeys.getCrateTrapChance();
+        if (baseChance <= 0) baseChance = ConfigKeys.getCrateTrapChance();
+        int increment = ConfigKeys.getAutoDropEscalationIncrement();
+        int cap = ConfigKeys.getAutoDropEscalationCap();
+        int effective = Math.min(baseChance + level * increment, cap);
+
+        ChatHandler.send(sender, "&9━━━━━━━━━━━━━━━━━━━━━━━━");
+        ChatHandler.send(sender, "&f  &b&lEscalation Status");
+        ChatHandler.send(sender, "&9━━━━━━━━━━━━━━━━━━━━━━━━");
+        ChatHandler.send(sender, " &7Level: &e" + level);
+        ChatHandler.send(sender, " &7Base chance: &e" + baseChance + "%");
+        ChatHandler.send(sender, " &7Effective chance: &e" + effective + "%");
+        ChatHandler.send(sender, " &7Cap: &e" + cap + "%");
+        ChatHandler.send(sender, "&9━━━━━━━━━━━━━━━━━━━━━━━━");
+    }
+
+    // ─── /supplydrop stats ───────────────────────────────────────────
+
+    private void handleStatsCommand(CommandSender sender, String[] args) {
+        if (!PermissionsHelper.isAdmin(sender)) {
+            ChatHandler.sendError(sender, "You must have &bsupplydrop.admin &cpermission to do this.");
+            return;
+        }
+
+        SupplyDrop plugin = SupplyDrop.getPluginInstance();
+        if (plugin == null) return;
+
+        com.supplydrop.stats.AutoDropStats stats = plugin.getAutoDropStats();
+        if (stats == null) {
+            ChatHandler.sendError(sender, "Stats not available.");
+            return;
+        }
+
+        if (args.length >= 2 && args[1].equalsIgnoreCase("reset")) {
+            stats.reset();
+            ChatHandler.send(sender, "&aAll statistics have been reset.");
+            return;
+        }
+
+        long lastDrop = stats.getLastDropTime();
+        String lastDropStr = lastDrop > 0 ? formatTimeSince(lastDrop) : "&7never";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("&9━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        sb.append("&f  &b&lAuto-Drop Statistics\n");
+        sb.append("&9━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        sb.append(" &7Total drops: &e").append(stats.getTotalDrops()).append("\n");
+        sb.append(" &7Total crates: &e").append(stats.getTotalCrates()).append("\n");
+        sb.append(" &7Avg crates/drop: &e").append(stats.getTotalDrops() > 0
+                ? String.format("%.1f", (double) stats.getTotalCrates() / stats.getTotalDrops()) : "0").append("\n");
+        sb.append(" &7Trap crates: &e").append(stats.getTrapCount()).append("\n");
+        sb.append(" &7Team crates: &e").append(stats.getTeamCount()).append("\n");
+        sb.append(" &7Chains triggered: &e").append(stats.getChainCount()).append("\n");
+        sb.append(" &7Last drop: &e").append(lastDropStr).append("\n");
+
+        Map<String, Integer> tplCounts = stats.getTemplateCounts();
+        if (!tplCounts.isEmpty()) {
+            sb.append(" &7Template usage:\n");
+            for (Map.Entry<String, Integer> entry : tplCounts.entrySet()) {
+                sb.append("   &8- &f").append(entry.getKey()).append(": &e").append(entry.getValue()).append("\n");
+            }
+        }
+
+        sb.append("&9━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        sb.append("&7Use &e/supplydrop stats reset &7to clear all stats.");
+
+        ChatHandler.sendWithoutPrefix(sender, sb.toString());
+    }
+
+    private String formatTimeSince(long epochMs) {
+        long diff = System.currentTimeMillis() - epochMs;
+        long seconds = diff / 1000;
+        if (seconds < 60) return seconds + "s ago";
+        long minutes = seconds / 60;
+        seconds = seconds % 60;
+        if (minutes < 60) return minutes + "m " + seconds + "s ago";
+        long hours = minutes / 60;
+        minutes = minutes % 60;
+        return hours + "h " + minutes + "m ago";
+    }
+
+    // ─── /supplydrop schedule ─────────────────────────────────────────
+
+    private void handleScheduleCommand(CommandSender sender, String[] args) {
+        if (!PermissionsHelper.isAdmin(sender)) {
+            ChatHandler.sendError(sender, "You must have &bsupplydrop.admin &cpermission to do this.");
+            return;
+        }
+
+        SupplyDrop plugin = SupplyDrop.getPluginInstance();
+        if (plugin == null) return;
+
+        if (args.length >= 2 && args[1].equalsIgnoreCase("add")) {
+            if (args.length < 3) {
+                ChatHandler.sendError(sender, "Usage: /supplydrop schedule add <HH:mm>");
+                return;
+            }
+            List<String> times = new ArrayList<>(ConfigKeys.getAutoDropScheduledTimes());
+            times.add(args[2]);
+            SupplyDrop.getConfiguration().getConfig().set(ConfigKeys.AUTO_DROP_SCHEDULED_TIMES, times);
+            SupplyDrop.getConfiguration().saveConfig();
+            ChatHandler.send(sender, "Added scheduled time &b" + args[2] + "&7.");
+            return;
+        }
+
+        if (args.length >= 2 && args[1].equalsIgnoreCase("remove")) {
+            if (args.length < 3) {
+                ChatHandler.sendError(sender, "Usage: /supplydrop schedule remove <HH:mm>");
+                return;
+            }
+            List<String> times = new ArrayList<>(ConfigKeys.getAutoDropScheduledTimes());
+            if (times.remove(args[2])) {
+                SupplyDrop.getConfiguration().getConfig().set(ConfigKeys.AUTO_DROP_SCHEDULED_TIMES, times);
+                SupplyDrop.getConfiguration().saveConfig();
+                ChatHandler.send(sender, "Removed scheduled time &b" + args[2] + "&7.");
+            } else {
+                ChatHandler.send(sender, "&c" + args[2] + " &cnot found in schedule.");
+            }
+            return;
+        }
+
+        List<String> times = ConfigKeys.getAutoDropScheduledTimes();
+        if (times.isEmpty()) {
+            ChatHandler.send(sender, "&7No scheduled times configured.");
+        } else {
+            ChatHandler.send(sender, "&bScheduled drops:");
+            for (String t : times) {
+                ChatHandler.send(sender, " &e" + t);
+            }
+        }
+        ChatHandler.send(sender, "&7Use &e/supplydrop schedule add <HH:mm> &7or &eremove <HH:mm>");
     }
 
     // ─── /supplydrop auto ────────────────────────────────────────────

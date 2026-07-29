@@ -153,6 +153,20 @@ announce:
   actionbar: false
   # Delay in ticks before revealing coordinates (0 = immediate)
   coord-reveal-delay: 0
+  # Announcement tiers (normal, wave, chain, seasonal)
+  # tiers:
+  #   normal:
+  #     prefix: "&b&lSupply Drop"
+  #     message: "&e{template} &bincoming!"
+  #     actionbar: false
+  #   wave:
+  #     prefix: "&6&l⚔ WAVE"
+  #     message: "&e{count}x {template} &bincoming!"
+  #     actionbar: false
+  #   chain:
+  #     prefix: "&c&l⛓ CHAIN"
+  #     message: "&e{template} &bchain drop starting!"
+  #     actionbar: true
 
 # Auto-drop settings (world event)
 auto-drop:
@@ -202,6 +216,57 @@ auto-drop:
   # Loot scaling: bonus rolls based on time since last drop
   loot-scaling: false
   loot-scaling-max: 20
+  # Player count scaling: adjust drop intensity based on online players
+  scaling:
+    enabled: false
+    min-players: 1
+    max-players: 20
+    wave-min: 1
+    wave-max: 5
+    bonus-rolls-per-player: 0
+  # Drop queuing: queue drops when sky is not clear
+  queue:
+    enabled: false
+    poll-interval: 100
+    max-queue-size: 5
+  # Loot rotation: cycle through templates in order instead of weighted random
+  rotation:
+    enabled: false
+  # Escalating difficulty: trap chance increases with consecutive undropped drops
+  escalation:
+    enabled: false
+    increment: 5
+    cap: 50
+    reset-on-open: true
+  # Scheduled drops: trigger at real-world times
+  scheduled:
+    enabled: false
+    times: []
+    # world-override: "world_nether"
+  # Drop warnings: countdown before drops
+  warning:
+    enabled: false
+    seconds-before:
+      - 60
+      - 30
+      - 10
+    message: "&e⚠ Supply drop in &c{seconds}s &e!"
+  # Drop chains: sequential crates after a single auto-drop
+  chain:
+    enabled: false
+    chance: 0
+    count: 3
+    interval: 1200
+    decrease-interval: true
+  # Seasonal events: override templates during specific date ranges
+  # seasons:
+  #   halloween:
+  #     start: "10-15"
+  #     end: "11-01"
+  #     announce-prefix: "&6🎃"
+  #     templates:
+  #       spooky_loot:
+  #         weight: 100
 
 # Logging settings
 logging:
