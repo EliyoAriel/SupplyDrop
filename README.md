@@ -6,6 +6,7 @@ A Minecraft Paper plugin that drops randomized care packages from the sky as wor
 
 - **Paper** 1.21+
 - **Java** 21+
+- Optional: [**LandClaim**](https://github.com/EliyoAriel/Landclaim) (parachute/crate integration, `avoid-claims`), [**Rewind**](https://github.com/EliyoAriel/Rewind) (chunk exclusion)
 
 ## Features
 
@@ -184,6 +185,7 @@ drop:
   falling-speed: 0.3
   fall-duration: 0
   height: 20
+  avoid-claims: false
   hologram:
     enabled: true
     lines:
@@ -742,6 +744,27 @@ rewind-integration:
 |---------|---------|-------------|
 | `enabled` | `true` | Toggle Rewind integration on/off |
 | `exclusion-radius` | `1` | Chunks excluded around each crate (1 = 3×3 chunk area, 2 = 5×5, etc.) |
+
+## LandClaim Integration
+
+Optionally integrates with [**LandClaim**](https://github.com/EliyoAriel/Landclaim) so crates and their drops work inside claims without triggering LandClaim protection. No compile dependency — uses reflection against `LandClaimAPI`.
+
+- **Parachute/hologram spawns exempt from the `mobs` flag**: every falling-block entity and hologram mob is pre-registered via `LandClaimAPI.registerParachuteSpawn` (and cleared after spawning), so the mobs-flag check never cancels them. Trap mobs spawned by trap crates remain subject to the flag by design.
+- **Crate loot exempt from claim pickup protection**: dropped loot is tagged with the `supplydrop:crate-loot` PDC key, so LandClaim lets any player pick it up even inside someone else's claim.
+- **Claim owners bypass crate anti-grief**: block place/break protection around crates is skipped for claim owners.
+
+### Configuration
+
+```yaml
+drop:
+  avoid-claims: false
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `drop.avoid-claims` | `false` | When `true`, auto-drops try to nudge their target to unclaimed land instead of dropping inside claims (see below). |
+
+When `drop.avoid-claims` is enabled and the target is claimed, DropController makes up to 12 attempts, picking a random angle and a distance between 4–20 blocks away; the first unclaimed candidate wins, otherwise the original target is used.
 
 ## Building
 
