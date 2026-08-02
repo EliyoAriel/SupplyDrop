@@ -241,7 +241,9 @@ public class DropController {
     }
 
     public static Location getSpawnLocation(World world, Location loc, DropOptions options) throws SkyNotClearException {
-        Location highestLocation = world.getHighestBlockAt(loc.getBlockX(), loc.getBlockZ()).getLocation()
+        Location target = ConfigKeys.isAvoidClaimsEnabled() ? findClaimFreeLocation(world, loc) : loc;
+
+        Location highestLocation = world.getHighestBlockAt(target.getBlockX(), target.getBlockZ()).getLocation()
                 .add(HALF_BLOCK, 0, HALF_BLOCK);
 
         if (loc.getBlockY() < highestLocation.getBlockY()) {
@@ -249,6 +251,25 @@ public class DropController {
         }
 
         return highestLocation.add(0, options.getDropHeight(), 0);
+    }
+
+    /**
+     * When avoid-claims is enabled, try to nudge the drop target onto
+     * unclaimed land. Falls back to the original target if none is found.
+     */
+    private static Location findClaimFreeLocation(World world, Location loc) {
+        if (!com.supplydrop.integration.LandClaimHook.isAvailable()) return loc;
+        if (!com.supplydrop.integration.LandClaimHook.isInClaim(loc)) return loc;
+
+        for (int attempt = 0; attempt < 12; attempt++) {
+            double angle = random.nextDouble() * Math.PI * 2;
+            double dist = 4 + random.nextDouble() * 20;
+            Location candidate = loc.clone().add(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+            if (!com.supplydrop.integration.LandClaimHook.isInClaim(candidate)) {
+                return candidate;
+            }
+        }
+        return loc;
     }
 
     private static Crate dropCrateAtLocation(Location spawnLocation, World world, List<ItemStack> loot, DropOptions options, String displayName, boolean isTrap) {

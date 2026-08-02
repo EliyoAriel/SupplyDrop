@@ -40,7 +40,14 @@ public class Hologram {
             Location loc = baseLocation.clone().add(0.5, yOffset, 0.5);
             text = ChatColor.translateAlternateColorCodes('&', text);
 
-            ArmorStand stand = (ArmorStand) world.spawnEntity(loc, EntityType.ARMOR_STAND);
+            com.supplydrop.integration.LandClaimHook.registerParachuteSpawn(loc);
+            ArmorStand stand;
+            try {
+                stand = (ArmorStand) world.spawnEntity(loc, EntityType.ARMOR_STAND);
+            } finally {
+                com.supplydrop.integration.LandClaimHook.clearParachuteSpawn(loc);
+            }
+            if (stand == null) continue;
             stand.setCustomName(text);
             stand.setCustomNameVisible(true);
             stand.setVisible(false);
@@ -93,7 +100,14 @@ public class Hologram {
             Location loc = baseLocation.clone().add(0.5, yOffset, 0.5);
             String text = ChatColor.translateAlternateColorCodes('&', lines.get(i));
 
-            ArmorStand stand = (ArmorStand) world.spawnEntity(loc, EntityType.ARMOR_STAND);
+            com.supplydrop.integration.LandClaimHook.registerParachuteSpawn(loc);
+            ArmorStand stand;
+            try {
+                stand = (ArmorStand) world.spawnEntity(loc, EntityType.ARMOR_STAND);
+            } finally {
+                com.supplydrop.integration.LandClaimHook.clearParachuteSpawn(loc);
+            }
+            if (stand == null) break;
             stand.setCustomName(text);
             stand.setCustomNameVisible(true);
             stand.setVisible(false);

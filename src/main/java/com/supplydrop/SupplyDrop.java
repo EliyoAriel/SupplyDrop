@@ -69,6 +69,7 @@ public class SupplyDrop extends JavaPlugin {
             configuration.getConfig();
 
             RewindIntegration.init();
+            com.supplydrop.integration.LandClaimHook.init();
 
             ChatTheme.init(configuration);
             ChatHandler.init(this);
@@ -83,6 +84,7 @@ public class SupplyDrop extends JavaPlugin {
             Bukkit.getPluginManager().registerEvents(new CrateCleanupListener(), this);
             Bukkit.getPluginManager().registerEvents(new AntiGriefListener(), this);
             Bukkit.getPluginManager().registerEvents(new ChatInputListener(), this);
+            Bukkit.getPluginManager().registerEvents(new com.supplydrop.listeners.PluginEnableListener(), this);
 
             packagesConfiguration = new PackagesConfig(this);
             packagesConfiguration.getConfig();
@@ -124,10 +126,11 @@ public class SupplyDrop extends JavaPlugin {
                         resumeState = Crate.State.READY_TO_OPEN;
                     }
 
-                    Crate crate = Crate.createPersistedInState(record.uuid(), record.location(), record.displayName(),
+            Crate crate = Crate.createPersistedInState(record.uuid(), record.location(), record.displayName(),
                             record.isTrap(), record.isTeamCrate(), record.requiredPlayers(),
                             resumeState, record.lockDuration(), record.lockStartTime(),
                             record.expiryTicks(), record.landTime());
+                    com.supplydrop.integration.LandClaimHook.tagCrate(record.location().getBlock(), record.uuid());
                     CrateManager.addCrate(record.location(), crate);
                     restored++;
                 }

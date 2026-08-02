@@ -4,7 +4,7 @@ main: com.supplydrop.SupplyDrop
 api-version: '1.21'
 description: World event supply drops with randomized loot tables
 authors: [BaseFields]
-softdepend: [Rewind]
+softdepend: [Rewind, LandClaim]
 commands:
   supplydrop:
     description: Call in a supply drop or manage loot tables

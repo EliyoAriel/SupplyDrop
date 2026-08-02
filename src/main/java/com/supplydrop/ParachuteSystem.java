@@ -41,7 +41,17 @@ public class ParachuteSystem {
         cancelDelayedCleanupTask();
 
         Location leashLocation = dropLocation.clone().add(new Vector(0, 1, 0));
-        parachuteLeash = (Slime) world.spawnEntity(leashLocation, EntityType.SLIME);
+        com.supplydrop.integration.LandClaimHook.registerParachuteSpawn(leashLocation);
+        try {
+            parachuteLeash = (Slime) world.spawnEntity(leashLocation, EntityType.SLIME);
+        } finally {
+            com.supplydrop.integration.LandClaimHook.clearParachuteSpawn(leashLocation);
+        }
+        if (parachuteLeash == null) {
+            cancel();
+            return;
+        }
+        com.supplydrop.integration.LandClaimHook.tagParachute(parachuteLeash);
         parachuteLeash.setAI(false);
         parachuteLeash.setSize(1);
         parachuteLeash.setInvisible(true);
@@ -50,10 +60,22 @@ public class ParachuteSystem {
         for (int i = 0; i < options.getChickenCount(); i++) {
             Location chickenLocation = dropLocation.clone()
                     .add(new Vector(Math.random() * 0.25, 2 + i, Math.random() * 0.25));
-            Chicken chicken = (Chicken) world.spawnEntity(chickenLocation, EntityType.CHICKEN);
-            chicken.setInvulnerable(true);
-            chicken.setLeashHolder(parachuteLeash);
-            chickenParachutes.add(chicken);
+            com.supplydrop.integration.LandClaimHook.registerParachuteSpawn(chickenLocation);
+            try {
+                Chicken chicken = (Chicken) world.spawnEntity(chickenLocation, EntityType.CHICKEN);
+                if (chicken == null) continue;
+                com.supplydrop.integration.LandClaimHook.tagParachute(chicken);
+                chicken.setInvulnerable(true);
+                chicken.setLeashHolder(parachuteLeash);
+                chickenParachutes.add(chicken);
+            } finally {
+                com.supplydrop.integration.LandClaimHook.clearParachuteSpawn(chickenLocation);
+            }
+        }
+
+        if (chickenParachutes.isEmpty()) {
+            cancel();
+            return;
         }
 
         fallingCrate.addPassenger(parachuteLeash);

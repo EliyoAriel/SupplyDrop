@@ -28,6 +28,8 @@ drop:
   falling-speed: 0.3
   # Fall duration in seconds (0 = use falling-speed, >0 = override falling-speed)
   fall-duration: 0
+  # Whether to try avoiding claimed land when picking a drop target (requires LandClaim)
+  avoid-claims: false
   # Height in blocks from which to drop the crate
   height: 20
   hologram:

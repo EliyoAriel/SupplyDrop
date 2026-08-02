@@ -103,6 +103,7 @@ public final class ConfigKeys {
     public static final String ANNOUNCE_ENABLED = "announce.enabled";
 
     public static final String DROP_FALL_DURATION = "drop.fall-duration";
+    public static final String DROP_AVOID_CLAIMS = "drop.avoid-claims";
 
     public static final String AUTO_DROP_FALL_DURATION = "auto-drop.fall-duration";
     public static final String CALL_FALL_DURATION = "call.fall-duration";
@@ -621,6 +622,10 @@ public final class ConfigKeys {
      */
     public static int getDropFallDuration() {
         return Math.max(0, getConfig().getInt(DROP_FALL_DURATION, 0));
+    }
+
+    public static boolean isAvoidClaimsEnabled() {
+        return getConfig().getBoolean(DROP_AVOID_CLAIMS, false);
     }
 
     public static int getAutoDropFallDuration() {

@@ -29,6 +29,9 @@ public class AntiGriefListener implements Listener {
     public void onBlockPlace(BlockPlaceEvent e) {
         Block placed = e.getBlock();
 
+        // Claim owners / trusted members keep building rights inside their claims
+        if (com.supplydrop.integration.LandClaimHook.isClaimOwnerBypass(e.getPlayer(), placed.getLocation())) return;
+
         // Zone protection: block all place inside LOCK/READY crate zones
         if (ZoneManager.isInZone(placed.getLocation())) {
             e.setCancelled(true);
@@ -53,6 +56,9 @@ public class AntiGriefListener implements Listener {
         if (e.getBlock().getType() == Material.BARREL) return;
 
         Block broken = e.getBlock();
+
+        // Claim owners / trusted members keep building rights inside their claims
+        if (com.supplydrop.integration.LandClaimHook.isClaimOwnerBypass(e.getPlayer(), broken.getLocation())) return;
 
         // Zone protection: block all break inside LOCK/READY crate zones
         if (ZoneManager.isInZone(broken.getLocation())) {

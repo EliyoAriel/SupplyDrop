@@ -185,13 +185,16 @@ public class Crate {
             barrel.update();
         }
 
+        com.supplydrop.integration.LandClaimHook.tagCrate(barrel.getBlock(), id);
+
         int overflowCount = 0;
         for (ItemStack is : contents) {
             Map<Integer, ItemStack> overflow = barrel.getInventory().addItem(is);
             for (ItemStack remaining : overflow.values()) {
                 if (remaining != null && !remaining.getType().isAir()) {
                     overflowCount++;
-                    world.dropItemNaturally(landedLocation.clone().add(0.5, 0.5, 0.5), remaining);
+                    org.bukkit.entity.Item itemEntity = world.dropItemNaturally(landedLocation.clone().add(0.5, 0.5, 0.5), remaining);
+                    com.supplydrop.integration.LandClaimHook.tagCrateLoot(itemEntity);
                 }
             }
         }
@@ -511,7 +514,8 @@ public class Crate {
         Location dropLoc = landedLocation.clone().add(0.5, 0.5, 0.5);
         for (ItemStack item : barrel.getInventory().getContents()) {
             if (item != null && !item.getType().isAir()) {
-                world.dropItemNaturally(dropLoc, item);
+                org.bukkit.entity.Item itemEntity = world.dropItemNaturally(dropLoc, item);
+                com.supplydrop.integration.LandClaimHook.tagCrateLoot(itemEntity);
             }
         }
         barrel.getInventory().clear();
@@ -534,8 +538,10 @@ public class Crate {
                             1,
                             (Math.random() - 0.5) * 3);
                     LivingEntity entity = (LivingEntity) world.spawnEntity(spawnLoc, entityType);
-                    entity.setCustomName(ChatColor.translateAlternateColorCodes('&', "&c&lTrap!"));
-                    entity.setCustomNameVisible(true);
+                    if (entity != null) {
+                        entity.setCustomName(ChatColor.translateAlternateColorCodes('&', "&c&lTrap!"));
+                        entity.setCustomNameVisible(true);
+                    }
                 } catch (IllegalArgumentException e) {
                     AirdropLogger.warning("Invalid trap mob type: " + mobType);
                 }
